@@ -1,2 +1,17 @@
+# Telegram Notion Bot v2.0 Dependencies
+
+# Core dependencies
 python-telegram-bot>=22.0
 python-dotenv>=1.0.0
+notion-client>=2.2.1
+Pillow>=10.0.0
+aiohttp>=3.8.0
+
+# Development dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Optional but recommended
+tenacity>=8.2.0  # For retry logic
+requests>=2.28.0  # HTTP requests backup

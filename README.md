@@ -1,174 +1,114 @@
-# Bot de Telegram - Extractor de Imágenes y Usuarios
+# Bot de Telegram con Integración a Notion
 
-Bot de Telegram que extrae automáticamente imágenes y obtiene información completa de usuarios que reenvían mensajes, incluso cuando tienen configuraciones de privacidad activadas.
+Bot de Telegram que recibe mensajes e imágenes y los sube automáticamente a una base de datos de Notion. Implementación optimizada y funcional.
 
 ## 🚀 Funcionalidades Principales
 
-### 📸 Extracción de Imágenes
-- **Descarga automática** de todas las imágenes recibidas
+### 📸 Recepción y Subida de Archivos
+- **Recibe imágenes** desde Telegram automáticamente
+- **Subida REAL a Notion** usando el proceso oficial de 3 pasos
 - **Soporte múltiples formatos**: JPG, PNG, GIF, BMP, WebP, TIFF
-- **Nombres únicos** con timestamp para evitar conflictos
-- **Metadatos completos**: resolución, tamaño, tipo de archivo
+- **Almacenamiento local temporal** para procesamiento
 
-### 👤 Identificación de Usuarios Reenviados
-- **Usuarios públicos**: ID, username, nombre completo
-- **Usuarios privados**: nombre visible + identificador único hash
-- **Canales y grupos**: ID, título, username
-- **Compatibilidad total** con API moderna y legacy de Telegram
+### 📊 Integración Completa con Notion
+- **Creación de registros** en base de datos de Notion
+- **Subida de archivos** con URLs públicas
+- **Manejo correcto de propiedades** de la base de datos
+- **Logging completo** de todas las operaciones
 
-### 📊 Información JSON Completa
-- Datos completos del mensaje (fecha, ID, contenido)
-- Información del remitente actual
-- Detalles del chat donde se recibe
-- **Análisis completo de reenvío** con múltiples métodos de detección
-- Identificadores únicos para rastreo
+### 🔧 Características Técnicas
+- **Manejo de errores robusto** con logging detallado
+- **Configuración mediante variables de entorno**
+- **Tests integrados** para validar funcionalidad
 
-## 🛠️ Tecnologías
+## 📋 Requisitos
 
 - **Python 3.8+**
 - **python-telegram-bot** - Interfaz con API de Telegram
+- **notion-client** - Cliente oficial de Notion
 - **python-dotenv** - Manejo de variables de entorno
-- **pathlib** - Manejo de archivos
-- **hashlib** - Generación de identificadores únicos
+- **aiohttp** - Peticiones HTTP asíncronas
+- **Pillow** - Procesamiento de imágenes
 
 ## ⚙️ Configuración
 
-### 1. Variables de Entorno
-```env
-TELEGRAM_BOT_TOKEN=tu_token_aqui
-```
-
-### 2. Instalación
-```bash
-pip install python-telegram-bot python-dotenv
-```
-
-### 3. Ejecución
-```bash
-python bot_test.py
-```
-
-## 🔧 Uso
-
-### Comandos del Bot
-- `/start` - Información de bienvenida
-- Envío de **cualquier mensaje** - Procesamiento automático
-- Envío de **imágenes** - Descarga + análisis completo
-
-### Tipos de Identificación
-- **Usuario Público**: `@username (ID: 123456789)`
-- **Usuario Privado**: `Nombre (privado)` + `ID: PRIVATE_hash_DATE`
-- **Canal**: `@canal (ID: -1001234567)`
-
-## 📁 Estructura
-```
-├── bot_test.py              # Bot principal
-├── .env                     # Token de Telegram
-├── requirements.txt         # Dependencias
-└── imagenes_recibidas/     # Imágenes descargadas
-```
-- ✅ Confirmación automática en Telegram
-- ✅ Código limpio y bien comentado
-- ✅ Logging configurable
-- ✅ Manejo de errores
-
-## Campos de la base de datos de Notion
-
-El bot guarda la siguiente información en Notion:
-
-- **Título**: Título generado automáticamente basado en el contenido
-- **Tipo**: Tipo de mensaje (Texto, Foto, Archivo, Otro)
-- **Fecha**: Fecha y hora de recepción del mensaje
-- **Usuario**: Nombre de usuario de Telegram
-- **URL**: Enlace al archivo (para fotos y documentos)
-- **Texto adicional**: Contenido completo del mensaje y metadatos
-
-## Instalación
-
-1. Clona este repositorio:
-```bash
-git clone https://github.com/satswere/botTelegramNotion.git
-cd botTelegramNotion
-```
-
-2. Instala las dependencias:
+### 1. Instalación de Dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configura las variables de entorno:
-```bash
-cp .env.example .env
-```
+### 2. Configuración de Variables de Entorno
+Copia el archivo `.env.example` a `.env` y configura tus tokens:
 
-4. Edita el archivo `.env` con tus credenciales:
 ```env
-TELEGRAM_BOT_TOKEN=tu_token_de_telegram_aqui
-NOTION_TOKEN=tu_token_de_notion_aqui
-NOTION_DATABASE_ID=tu_id_de_base_de_datos_notion_aqui
+# Tokens requeridos
+TELEGRAM_BOT_TOKEN=tu_telegram_bot_token_aqui
+NOTION_TOKEN=tu_notion_token_aqui
+
+# ID de la base de datos de Notion
+NOTION_DATABASE_ID=tu_database_id_aqui
+
+# Configuración opcional
+ENVIRONMENT=development
+DEBUG=true
 LOG_LEVEL=INFO
 ```
 
-## Configuración de Notion
-
-1. Crea una integración en Notion:
-   - Ve a https://www.notion.so/my-integrations
-   - Crea una nueva integración
-   - Copia el token de integración
-
-2. Crea una base de datos en Notion con las siguientes columnas:
-   - **Título** (Title)
-   - **Tipo** (Select): opciones "Texto", "Foto", "Archivo", "Otro"
-   - **Fecha** (Date)
-   - **Usuario** (Text)
-   - **URL** (URL)
-   - **Texto adicional** (Text)
-
-3. Comparte la base de datos con tu integración:
-   - Abre tu base de datos en Notion
-   - Haz clic en "Share" → "Add people"
-   - Busca tu integración y agrégala
-
-4. Copia el ID de la base de datos desde la URL de Notion
-
-## Configuración del Bot de Telegram
-
-1. Crea un bot con @BotFather en Telegram
-2. Obtén el token del bot
-3. Agrégalo a tu archivo `.env`
-
-## Uso
-
-1. Ejecuta el bot:
+### 3. Ejecución del Bot
 ```bash
-python bot.py
+python bot_main.py
 ```
 
-2. En Telegram, busca tu bot y envíale:
-   - `/start` - Mensaje de bienvenida
-   - `/help` - Ayuda sobre comandos
-   - Cualquier texto, foto o archivo
+### 4. Tests de Validación
+```bash
+# Test de conexión a Notion
+python test_notion_connection.py
 
-3. El bot confirmará cuando haya guardado exitosamente en Notion
+# Test de subida de archivos
+python test_real_upload.py
+```
 
-## Estructura del Proyecto
+## 📁 Estructura del Proyecto
 
 ```
 botTelegramNotion/
-├── bot.py              # Aplicación principal del bot
-├── requirements.txt    # Dependencias de Python
-├── .env.example       # Ejemplo de configuración
-├── .gitignore         # Archivos ignorados por Git
-└── README.md          # Este archivo
+├── bot_main.py              # Script principal del bot
+├── test_real_upload.py      # Test de subida de archivos a Notion  
+├── test_notion_connection.py # Test de conexión a Notion
+├── requirements.txt         # Dependencias del proyecto
+├── .env.example            # Ejemplo de configuración
+├── .env                    # Configuración (no incluido en Git)
+├── .gitignore              # Archivos ignorados por Git
+├── README.md               # Esta documentación
+└── storage/                # Carpeta para archivos temporales
+    ├── images/             # Imágenes descargadas
+    └── logs/               # Logs de la aplicación
 ```
 
-## Dependencias
+## 🚀 Uso
 
-- `python-telegram-bot==22.4` - Biblioteca de Telegram Bot API
-- `notion-client==2.2.1` - Cliente oficial de Notion API
-- `python-dotenv==1.0.1` - Manejo de variables de entorno
-- `requests==2.32.3` - Biblioteca para peticiones HTTP
+1. **Inicia el bot**: `python bot_main.py`
+2. **Envía imágenes** al bot de Telegram
+3. **Verifica** que se creen registros en tu base de datos de Notion
+4. **Revisa los logs** para debug si es necesario
 
-## Licencia
+## 🔧 Desarrollo y Debugging
 
-Este proyecto está bajo la Licencia MIT.
+- Los logs se guardan en `bot.log` y también se muestran en consola
+- Usa `DEBUG=true` en `.env` para logs más detallados
+- Los tests ayudan a validar la conexión y funcionalidad
+
+## 📋 Campos de la Base de Datos de Notion
+
+El bot crea registros con los siguientes campos:
+
+- **Nombre**: Texto con el nombre del archivo
+- **Fecha**: Fecha de creación del registro
+- **Archivo**: Archivo subido (imagen)
+- **Usuario**: Información del usuario de Telegram
+- **Chat ID**: ID del chat de Telegram
+- **Message ID**: ID del mensaje
+
+## 📄 Licencia
+
+Proyecto de uso personal/educativo.
