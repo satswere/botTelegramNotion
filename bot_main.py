@@ -6,6 +6,7 @@ BOT DE TELEGRAM CON INTEGRACIÓN COMPLETA A NOTION
 Script principal consolidado que combina:
 - Bot de Telegram funcional (base: bot_working.py)
 - Subida REAL de archivos a Notion (base: test_real_upload.py)
+- Extracción COMPLETA de información de mensajes reenviados (base: bot_test.py)
 - Manejo correcto de propiedades de Notion
 - Logs y manejo de errores
 
@@ -13,14 +14,29 @@ Funcionalidades:
 ✅ Recibe mensajes e imágenes desde Telegram
 ✅ Sube archivos REALES a Notion (proceso de 3 pasos)
 ✅ Crea registros en la base de datos con propiedades correctas
+✅ EXTRACCIÓN COMPLETA de información de mensajes reenviados:
+   - Identifica usuarios originales (incluso con privacidad)
+   - Extrae información de canales/grupos origen
+   - Genera identificadores únicos para reenvíos
+   - Maneja tanto API moderna (forward_origin) como legacy
+   - Guarda toda la información en los registros de Notion
 ✅ Manejo de errores y logging completo
 ✅ Variables de entorno seguras
+
+NUEVA FUNCIONALIDAD DE REENVÍOS:
+- Detecta automáticamente si un mensaje es reenviado
+- Extrae información del usuario/canal original
+- Maneja usuarios con privacidad activada
+- Genera identificadores únicos basados en hash
+- Guarda toda la información en Notion de forma estructurada
 """
 
 import logging
 import os
 import asyncio
 import aiohttp
+import json
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -97,6 +113,193 @@ class TelegramNotionBot:
         logger.info("✅ Configuración validada")
     
     # =============================================================================
+    # EXTRACCIÓN DE INFORMACIÓN DE MENSAJES REENVIADOS
+    # =============================================================================
+    
+    def _extract_forward_info(self, message: Message) -> dict:
+        """Extrae información completa de mensajes reenviados"""
+        # Información básica del mensaje
+        message_data = {
+            "timestamp": datetime.now().isoformat(),
+            "message_id": message.message_id,
+            "date": message.date.isoformat() if message.date else None,
+        }
+        
+        # Información del usuario que envía
+        user = message.from_user
+        if user:
+            message_data["sender"] = {
+                "user_id": user.id,
+                "username": getattr(user, 'username', None),
+                "full_name": f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip(),
+                "is_bot": getattr(user, 'is_bot', None),
+                "language_code": getattr(user, 'language_code', None)
+            }
+        
+        # Información del chat
+        chat = message.chat
+        message_data["chat"] = {
+            "chat_id": chat.id,
+            "chat_type": chat.type,
+            "title": getattr(chat, 'title', None),
+            "username": getattr(chat, 'username', None)
+        }
+        
+        # **INFORMACIÓN DE REENVÍO - PARTE PRINCIPAL**
+        forward_info = self._analyze_forward_origin(message)
+        message_data["forwarding"] = forward_info
+        
+        return message_data
+    
+    def _analyze_forward_origin(self, message: Message) -> dict:
+        """Analiza el origen del mensaje reenviado"""
+        # Campos de reenvío estándar
+        forward_from = getattr(message, 'forward_from', None)
+        forward_from_chat = getattr(message, 'forward_from_chat', None)
+        forward_sender_name = getattr(message, 'forward_sender_name', None)
+        forward_date = getattr(message, 'forward_date', None)
+        is_automatic_forward = getattr(message, 'is_automatic_forward', False)
+        
+        # Campo moderno de origen
+        forward_origin = getattr(message, 'forward_origin', None)
+        
+        # Inicializar información de origen
+        origin_info = {}
+        
+        # Analizar forward_origin (API moderna)
+        if forward_origin:
+            if hasattr(forward_origin, 'sender_user') and forward_origin.sender_user:
+                # Usuario específico (sin privacidad)
+                sender_user = forward_origin.sender_user
+                origin_info["origin_sender_user_id"] = sender_user.id
+                origin_info["origin_sender_name"] = f"{getattr(sender_user, 'first_name', '') or ''} {getattr(sender_user, 'last_name', '') or ''}".strip()
+                origin_info["origin_sender_username"] = getattr(sender_user, 'username', None)
+                
+            elif hasattr(forward_origin, 'sender_user_name') and forward_origin.sender_user_name:
+                # Usuario con privacidad activada (solo nombre visible)
+                origin_info["origin_sender_name"] = getattr(forward_origin, 'sender_user_name', None)
+                
+            elif hasattr(forward_origin, 'chat') and forward_origin.chat:
+                # Canal o grupo
+                chat = forward_origin.chat
+                origin_info["origin_chat_id"] = chat.id
+                origin_info["origin_chat_title"] = getattr(chat, 'title', None)
+                origin_info["origin_chat_username"] = getattr(chat, 'username', None)
+        
+        # Fecha del origen
+        origin_date = getattr(forward_origin, 'date', None) if forward_origin else None
+        if origin_date:
+            origin_info["origin_date"] = origin_date.isoformat()
+        
+        # Determinar si es mensaje reenviado
+        is_forwarded = bool(
+            forward_from or forward_from_chat or forward_sender_name or 
+            forward_date or forward_origin or is_automatic_forward
+        )
+        
+        # Generar identificador único para el reenvío
+        unique_identifier = None
+        if is_forwarded:
+            identifier_parts = []
+            
+            if origin_info.get("origin_sender_user_id"):
+                identifier_parts.append(f"USER_{origin_info['origin_sender_user_id']}")
+            elif origin_info.get("origin_sender_name"):
+                # Hash del nombre para usuarios privados
+                sender_name = origin_info["origin_sender_name"]
+                if sender_name:
+                    name_hash = hashlib.md5(sender_name.encode('utf-8')).hexdigest()[:8]
+                    identifier_parts.append(f"PRIVATE_{name_hash}")
+            elif origin_info.get("origin_chat_id"):
+                identifier_parts.append(f"CHAT_{origin_info['origin_chat_id']}")
+            
+            # Agregar fecha
+            date_str = origin_info.get("origin_date") or (forward_date.isoformat() if forward_date else None)
+            if date_str:
+                identifier_parts.append(f"DATE_{date_str[:10]}")
+            
+            if identifier_parts:
+                unique_identifier = "_".join(identifier_parts)
+        
+        # Información de reenvío consolidada
+        forward_info = {
+            "is_forwarded": is_forwarded,
+            "forward_date": forward_date.isoformat() if forward_date else None,
+            "is_automatic_forward": is_automatic_forward,
+            "unique_identifier": unique_identifier,
+            "origin_info": origin_info
+        }
+        
+        # Información de métodos antiguos (compatibilidad)
+        if forward_from:
+            forward_info["legacy_sender"] = {
+                "user_id": forward_from.id,
+                "username": getattr(forward_from, 'username', None),
+                "full_name": f"{getattr(forward_from, 'first_name', '') or ''} {getattr(forward_from, 'last_name', '') or ''}".strip()
+            }
+        
+        if forward_from_chat:
+            forward_info["legacy_chat"] = {
+                "chat_id": forward_from_chat.id,
+                "title": getattr(forward_from_chat, 'title', None),
+                "username": getattr(forward_from_chat, 'username', None)
+            }
+        
+        if forward_sender_name:
+            forward_info["legacy_sender_name"] = forward_sender_name
+        
+        return forward_info
+    
+    def _format_forward_response(self, forward_info: dict) -> str:
+        """Formatea la respuesta sobre el reenvío para el usuario"""
+        if not forward_info.get("is_forwarded"):
+            return ""
+        
+        origin = forward_info.get("origin_info", {})
+        unique_id = forward_info.get("unique_identifier")
+        
+        # Priorizar información moderna
+        if origin.get("origin_sender_user_id"):
+            # Usuario con ID conocido
+            user_id = origin["origin_sender_user_id"]
+            username = origin.get("origin_sender_username")
+            name = origin.get("origin_sender_name")
+            
+            user_info = f"ID: {user_id}"
+            if username:
+                user_info += f" (@{username})"
+            elif name:
+                user_info += f" ({name})"
+            
+            return f"\n\n🔄 **Mensaje reenviado de usuario**\n👤 {user_info}"
+            
+        elif origin.get("origin_sender_name"):
+            # Usuario con privacidad (solo nombre)
+            name = origin["origin_sender_name"]
+            return f"\n\n🔄 **Mensaje reenviado**\n👤 Usuario: {name} (perfil privado)"
+            
+        elif origin.get("origin_chat_id"):
+            # Canal o grupo
+            chat_id = origin["origin_chat_id"]
+            title = origin.get("origin_chat_title")
+            username = origin.get("origin_chat_username")
+            
+            chat_info = f"ID: {chat_id}"
+            if username:
+                chat_info += f" (@{username})"
+            elif title:
+                chat_info += f" ({title})"
+            
+            return f"\n\n🔄 **Mensaje reenviado de canal/grupo**\n📢 {chat_info}"
+        
+        # Fallback a métodos antiguos
+        legacy = forward_info.get("legacy_sender")
+        if legacy:
+            return f"\n\n🔄 **Mensaje reenviado**\n👤 {legacy.get('full_name', 'Usuario')} (ID: {legacy.get('user_id')})"
+        
+        return f"\n\n🔄 **Mensaje reenviado**\n📝 ID único: {unique_id or 'N/A'}"
+
+    # =============================================================================
     # COMANDOS DEL BOT
     # =============================================================================
     
@@ -157,7 +360,11 @@ class TelegramNotionBot:
             # Probar conexión con Notion
             if self.notion_client:
                 database = self.notion_client.databases.retrieve(self.database_id)
-                database_name = database['title'][0]['plain_text'] if database['title'] else 'Base de datos'
+                # database es un dict, no un awaitable
+                if isinstance(database, dict):
+                    database_name = database.get('title', [{}])[0].get('plain_text', 'Base de datos') if database.get('title') else 'Base de datos'
+                else:
+                    database_name = "Base de datos"
                 notion_status = "✅ Conectado"
             else:
                 database_name = "Error"
@@ -191,6 +398,9 @@ class TelegramNotionBot:
         status = await message.reply_text("🔄 Procesando imagen...")
         
         try:
+            # 0. EXTRAER INFORMACIÓN COMPLETA DEL MENSAJE (incluye reenvío)
+            message_data = self._extract_forward_info(message)
+            
             # 1. DESCARGAR IMAGEN
             await status.edit_text("⬇️ Descargando imagen...")
             filename = await self._download_image(message)
@@ -205,25 +415,34 @@ class TelegramNotionBot:
                 await status.edit_text("❌ Error subiendo archivo")
                 return
             
-            # 3. CREAR REGISTRO EN NOTION
+            # 3. CREAR REGISTRO EN NOTION CON INFORMACIÓN COMPLETA
             await status.edit_text("📝 Creando registro en Notion...")
-            page_id = await self._create_notion_record(message, filename, file_upload_id)
+            page_id = await self._create_notion_record(message, filename, file_upload_id, message_data)
             if not page_id:
                 await status.edit_text("❌ Error creando registro")
                 return
             
-            # 4. CONFIRMACIÓN FINAL
+            # 4. CONFIRMACIÓN FINAL CON INFORMACIÓN DE REENVÍO
             user_name = self._get_user_name(message)
             success_message = (
                 f"✅ **¡Imagen procesada exitosamente!**\n\n"
                 f"📄 **Registro creado en Notion**\n"
                 f"👤 **Usuario**: {user_name}\n"
                 f"📁 **Archivo**: `{filename}`\n"
-                f"🆔 **Page ID**: `{page_id[:20]}...`\n\n"
-                f"🔗 Revisa tu base de datos de Notion para ver el registro completo."
+                f"🆔 **Page ID**: `{page_id[:20]}...`"
             )
+            
+            # Agregar información de reenvío si aplica
+            forward_response = self._format_forward_response(message_data.get("forwarding", {}))
+            if forward_response:
+                success_message += forward_response
+            
+            success_message += "\n\n🔗 Revisa tu base de datos de Notion para ver el registro completo."
+            
             await status.edit_text(success_message, parse_mode='Markdown')
             
+            # Log con información completa
+            self._log_message_info(message_data, True, filename)
             logger.info(f"✅ Imagen procesada: {filename} -> {page_id}")
             
         except Exception as e:
@@ -340,9 +559,9 @@ class TelegramNotionBot:
     # CREACIÓN DE REGISTROS EN NOTION
     # =============================================================================
     
-    async def _create_notion_record(self, message: Message, filename: str, file_upload_id: str) -> Optional[str]:
+    async def _create_notion_record(self, message: Message, filename: str, file_upload_id: str, message_data: Optional[dict] = None) -> Optional[str]:
         """
-        PASO 3: Crear registro en Notion con archivo real adjunto
+        PASO 3: Crear registro en Notion con archivo real adjunto y información completa de reenvío
         """
         try:
             logger.info("3️⃣ Creando registro con archivo real adjunto...")
@@ -353,17 +572,67 @@ class TelegramNotionBot:
             
             # Extraer información adicional
             text_content = message.text or message.caption or ""
-            is_forwarded = message.forward_origin is not None
+            forward_info = message_data.get("forwarding", {}) if message_data else {}
+            is_forwarded = forward_info.get("is_forwarded", False)
             
             # Información adicional para Mercado / Selección
             additional_info = []
             if text_content.strip():
                 additional_info.append(f"Texto: {text_content[:300]}")
-            if is_forwarded:
-                additional_info.append("Mensaje reenviado")
-                additional_info.append(f"Usuario: {user_name}")
             
-            market_info = "\n".join(additional_info) if additional_info else f"Archivo subido: {filename}"
+            # Agregar información detallada de reenvío
+            if is_forwarded:
+                additional_info.append("🔄 MENSAJE REENVIADO")
+                
+                origin = forward_info.get("origin_info", {})
+                unique_id = forward_info.get("unique_identifier")
+                
+                # Información del origen
+                if origin.get("origin_sender_user_id"):
+                    user_id = origin.get("origin_sender_user_id")
+                    username = origin.get("origin_sender_username", "")
+                    name = origin.get("origin_sender_name", "")
+                    additional_info.append(f"👤 Origen: ID {user_id}")
+                    if username:
+                        additional_info.append(f"   @{username}")
+                    if name:
+                        additional_info.append(f"   {name}")
+                        
+                elif origin.get("origin_sender_name"):
+                    sender_name = origin.get("origin_sender_name")
+                    if sender_name:
+                        additional_info.append(f"👤 Usuario privado: {sender_name}")
+                    
+                elif origin.get("origin_chat_id"):
+                    chat_id = origin.get("origin_chat_id")
+                    title_chat = origin.get("origin_chat_title", "")
+                    username_chat = origin.get("origin_chat_username", "")
+                    if chat_id:
+                        additional_info.append(f"📢 Canal/Grupo: ID {chat_id}")
+                        if username_chat:
+                            additional_info.append(f"   @{username_chat}")
+                        elif title_chat:
+                            additional_info.append(f"   {title_chat}")
+                
+                # Fecha original y ID único
+                if origin.get("origin_date"):
+                    origin_date = origin.get("origin_date")
+                    if origin_date and len(origin_date) >= 10:
+                        additional_info.append(f"📅 Fecha original: {origin_date[:10]}")
+                if unique_id:
+                    additional_info.append(f"🆔 ID único: {unique_id}")
+                
+                # Información del que reenvía
+                sender = message_data.get("sender", {}) if message_data else {}
+                if sender:
+                    additional_info.append(f"📤 Reenviado por: {sender.get('full_name', 'Usuario')} (ID: {sender.get('user_id', 'N/A')})")
+            else:
+                additional_info.append(f"📤 Usuario: {user_name}")
+            
+            # Información de archivo
+            additional_info.append(f"📁 Archivo: {filename}")
+            
+            market_info = "\n".join(additional_info)
             
             # Propiedades del registro (usando nombres correctos de la base de datos)
             properties = {
@@ -403,7 +672,7 @@ class TelegramNotionBot:
                         }
                     ]
                 },
-                # Información adicional
+                # Información adicional (incluyendo información de reenvío)
                 "Mercado / Selección": {
                     "rich_text": [
                         {
@@ -441,6 +710,47 @@ class TelegramNotionBot:
     # UTILIDADES
     # =============================================================================
     
+    def _log_message_info(self, message_data: dict, has_image: bool, filename: Optional[str] = None):
+        """Registra información completa del mensaje procesado"""
+        try:
+            print("\n" + "="*80)
+            print("🖼️ IMAGEN PROCESADA" if has_image else "💬 MENSAJE PROCESADO")
+            print("="*80)
+            
+            # Log resumido
+            sender = message_data.get("sender", {})
+            sender_name = sender.get("full_name", "Usuario")
+            sender_id = sender.get("user_id", "N/A")
+            
+            forward_info = message_data.get("forwarding", {})
+            log_msg = f"{'Imagen' if has_image else 'Mensaje'} procesado de {sender_name} ({sender_id})"
+            
+            if filename:
+                log_msg += f" - Archivo: {filename}"
+            
+            if forward_info.get("is_forwarded"):
+                origin = forward_info.get("origin_info", {})
+                if origin.get("origin_sender_user_id"):
+                    origin_name = origin.get("origin_sender_username") or origin.get("origin_sender_name")
+                    origin_id = origin.get("origin_sender_user_id")
+                    log_msg += f" - REENVIADO DE: {origin_name} (ID: {origin_id})"
+                elif origin.get("origin_sender_name"):
+                    sender_name = origin.get("origin_sender_name")
+                    log_msg += f" - REENVIADO DE: {sender_name} (privado)"
+                elif origin.get("origin_chat_id"):
+                    chat_name = origin.get("origin_chat_username") or origin.get("origin_chat_title")
+                    chat_id = origin.get("origin_chat_id")
+                    log_msg += f" - REENVIADO DE CANAL: {chat_name} (ID: {chat_id})"
+            
+            # Log detallado en JSON (para debugging)
+            print(json.dumps(message_data, indent=2, ensure_ascii=False, default=str))
+            print("="*80 + "\n")
+            
+            logger.info(log_msg)
+            
+        except Exception as e:
+            logger.error(f"Error en logging: {e}")
+    
     def _get_user_name(self, message: Message) -> str:
         """Obtiene el nombre del usuario de manera segura"""
         if not message.from_user:
@@ -461,19 +771,39 @@ class TelegramNotionBot:
             return f"Usuario {user.id}"
     
     async def handle_other_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Maneja mensajes que no son imágenes"""
+        """Maneja mensajes que no son imágenes pero extrae información de reenvío"""
         message = update.message
         if not message:
             return
         
-        help_text = (
-            "📸 **Solo proceso imágenes por ahora**\n\n"
-            "Para usar el bot:\n"
-            "1️⃣ Envía una imagen (JPG, PNG, etc.)\n"
-            "2️⃣ El bot la procesará automáticamente\n\n"
-            "💡 Usa `/help` para más información"
-        )
-        await message.reply_text(help_text, parse_mode='Markdown')
+        try:
+            # Extraer información del mensaje (incluye reenvío)
+            message_data = self._extract_forward_info(message)
+            forward_info = message_data.get("forwarding", {})
+            
+            # Respuesta base
+            help_text = "📸 **Solo proceso imágenes por ahora**\n\n"
+            
+            # Si es un mensaje reenviado, mostrar información
+            if forward_info.get("is_forwarded"):
+                forward_response = self._format_forward_response(forward_info)
+                help_text += f"**Mensaje analizado:**{forward_response}\n\n"
+            
+            help_text += (
+                "Para usar el bot:\n"
+                "1️⃣ Envía una imagen (JPG, PNG, etc.)\n"
+                "2️⃣ El bot la procesará automáticamente\n\n"
+                "💡 Usa `/help` para más información"
+            )
+            
+            await message.reply_text(help_text, parse_mode='Markdown')
+            
+            # Log de la información extraída
+            self._log_message_info(message_data, False)
+            
+        except Exception as e:
+            logger.error(f"Error procesando mensaje: {e}")
+            await message.reply_text("📸 **Solo proceso imágenes por ahora**\n\n💡 Usa `/help` para más información")
     
     # =============================================================================
     # EJECUCIÓN DEL BOT
