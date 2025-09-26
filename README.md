@@ -1,13 +1,72 @@
-# botTelegramNotion
+# Bot de Telegram - Extractor de Imágenes y Usuarios
 
-Bot de Telegram en Python que recibe mensajes, fotos y archivos desde un grupo o chat y los guarda automáticamente en una base de datos de Notion usando la API oficial.
+Bot de Telegram que extrae automáticamente imágenes y obtiene información completa de usuarios que reenvían mensajes, incluso cuando tienen configuraciones de privacidad activadas.
 
-## Características
+## 🚀 Funcionalidades Principales
 
-- ✅ Compatible con python-telegram-bot 22.x
-- ✅ Integración con Notion API usando notion-client
-- ✅ Manejo de texto, fotos y archivos
-- ✅ Configuración via archivo .env
+### 📸 Extracción de Imágenes
+- **Descarga automática** de todas las imágenes recibidas
+- **Soporte múltiples formatos**: JPG, PNG, GIF, BMP, WebP, TIFF
+- **Nombres únicos** con timestamp para evitar conflictos
+- **Metadatos completos**: resolución, tamaño, tipo de archivo
+
+### 👤 Identificación de Usuarios Reenviados
+- **Usuarios públicos**: ID, username, nombre completo
+- **Usuarios privados**: nombre visible + identificador único hash
+- **Canales y grupos**: ID, título, username
+- **Compatibilidad total** con API moderna y legacy de Telegram
+
+### 📊 Información JSON Completa
+- Datos completos del mensaje (fecha, ID, contenido)
+- Información del remitente actual
+- Detalles del chat donde se recibe
+- **Análisis completo de reenvío** con múltiples métodos de detección
+- Identificadores únicos para rastreo
+
+## 🛠️ Tecnologías
+
+- **Python 3.8+**
+- **python-telegram-bot** - Interfaz con API de Telegram
+- **python-dotenv** - Manejo de variables de entorno
+- **pathlib** - Manejo de archivos
+- **hashlib** - Generación de identificadores únicos
+
+## ⚙️ Configuración
+
+### 1. Variables de Entorno
+```env
+TELEGRAM_BOT_TOKEN=tu_token_aqui
+```
+
+### 2. Instalación
+```bash
+pip install python-telegram-bot python-dotenv
+```
+
+### 3. Ejecución
+```bash
+python bot_test.py
+```
+
+## 🔧 Uso
+
+### Comandos del Bot
+- `/start` - Información de bienvenida
+- Envío de **cualquier mensaje** - Procesamiento automático
+- Envío de **imágenes** - Descarga + análisis completo
+
+### Tipos de Identificación
+- **Usuario Público**: `@username (ID: 123456789)`
+- **Usuario Privado**: `Nombre (privado)` + `ID: PRIVATE_hash_DATE`
+- **Canal**: `@canal (ID: -1001234567)`
+
+## 📁 Estructura
+```
+├── bot_test.py              # Bot principal
+├── .env                     # Token de Telegram
+├── requirements.txt         # Dependencias
+└── imagenes_recibidas/     # Imágenes descargadas
+```
 - ✅ Confirmación automática en Telegram
 - ✅ Código limpio y bien comentado
 - ✅ Logging configurable
