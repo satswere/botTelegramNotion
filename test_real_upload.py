@@ -230,7 +230,7 @@ class NotionRealUploadTester:
             
             # 2. Buscar archivo de prueba
             logger.info("Buscando archivo de prueba...")
-            images_folder = Path("imagenes_recibidas")
+            images_folder = Path("storage/images")
             test_file = None
             
             if images_folder.exists():
@@ -240,7 +240,7 @@ class NotionRealUploadTester:
                         break
             
             if not test_file:
-                raise Exception("No hay archivos de prueba en 'imagenes_recibidas'")
+                raise Exception("No hay archivos de prueba en 'images'")
             
             logger.info(f"📁 Usando archivo: {test_file.name}")
             

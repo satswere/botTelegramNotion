@@ -77,7 +77,7 @@ class TelegramNotionBot:
         }
         
         # Carpeta para imágenes
-        self.images_path = Path("imagenes_recibidas")
+        self.images_path = Path("storage/images")
         self.images_path.mkdir(exist_ok=True)
         
         logger.info(f"📁 Carpeta de imágenes: {self.images_path.absolute()}")
