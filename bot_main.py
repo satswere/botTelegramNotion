@@ -654,6 +654,10 @@ class TelegramNotionBot:
                     "select": {
                         "name": "Pendiente"
                     }
+                }, "Casa de apuestas": {
+                    "select": {
+                        "name": "bet365"
+                    }
                 },
                 "Tipo de apuesta": {
                     "select": {
@@ -663,7 +667,7 @@ class TelegramNotionBot:
                 # ARCHIVO REAL usando file_upload_id
                 "Captura / Comprobante": {
                     "files": [
-                        {
+                        {   
                             "type": "file_upload",
                             "file_upload": {
                                 "id": file_upload_id
@@ -681,6 +685,9 @@ class TelegramNotionBot:
                             }
                         }
                     ]
+                },
+                "Importe apostado": {
+                    "number": 500
                 }
             }
             
