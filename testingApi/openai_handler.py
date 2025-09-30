@@ -114,7 +114,18 @@ class OpenAIHandler:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     response_data = await response.json()
-                    return response_data['choices'][0]['message']['content']
+                    content = response_data['choices'][0]['message']['content']
+                    
+                    # Limpiar marcadores de código JSON si están presentes
+                    cleaned_content = content.replace('```json', '').replace('```', '').strip()
+                    
+                    # Validar que sea un JSON válido
+                    try:
+                        json.loads(cleaned_content)
+                        return cleaned_content
+                    except json.JSONDecodeError:
+                        # Si no es JSON válido, devolver el contenido original
+                        return content
         except Exception as e:
             print(f"Error al analizar la imagen con OpenAI: {str(e)}")
             raise

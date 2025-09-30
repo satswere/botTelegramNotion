@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import json
+
 """
 BOT DE TELEGRAM CON INTEGRACIÓN COMPLETA A NOTION
 ===============================================
@@ -45,6 +47,7 @@ from telegram import Update, Message
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from notion_client import Client
 from dotenv import load_dotenv
+from testingApi.openai_handler import OpenAIHandler
 
 # Cargar variables de entorno
 load_dotenv()
@@ -95,6 +98,9 @@ class TelegramNotionBot:
         # Carpeta para imágenes
         self.images_path = Path("storage/images")
         self.images_path.mkdir(exist_ok=True)
+        
+        # Inicializar OpenAI handler
+        self.openai_handler = OpenAIHandler()
         
         logger.info(f"📁 Carpeta de imágenes: {self.images_path.absolute()}")
         logger.info("✅ Bot inicializado correctamente")
@@ -415,22 +421,106 @@ class TelegramNotionBot:
                 await status.edit_text("❌ Error subiendo archivo")
                 return
             
-            # 3. CREAR REGISTRO EN NOTION CON INFORMACIÓN COMPLETA
+            # 3. ANALIZAR IMAGEN CON OPENAI
+            await status.edit_text("🔍 Analizando imagen con OpenAI...")
+            image_path = str(self.images_path / filename)
+            extraction_prompt = """Eres un sistema de extracción de campos para tickets de apuesta generados por Bet365. Tu tarea es identificar y extraer información clave a partir de un texto que describe los detalles de un ticket. La información debe estructurarse en campos específicos según el formato definido.
+
+# Campos que debes identificar y extraer:
+
+1. **ID del Ticket:** El número identificador único del ticket (ej: "123456")
+2. **Deporte:** El deporte relacionado con el evento (ej: "Fútbol", "Tenis", "Baloncesto")
+3. **Evento:** Nombre específico del evento o partido (ej: "Barcelona vs Real Madrid")
+4. **Mercado:** El tipo de apuesta realizada (ej: "Ganador del partido", "Over/Under 2.5")
+5. **Selección:** La elección del apostador (ej: "Barcelona", "Más de 2.5 goles")
+6. **Cuota:** La cuota asociada a la apuesta (ej: "1.75", "2.10")
+7. **Monto apostado:** Cantidad en la moneda definida (ej: "€20", "€50")
+8. **Ganancia potencial:** Cantidad que se puede ganar (ej: "€35", "€105")
+9. **Estado de la apuesta:** Estado actual del ticket (ej: "Ganada", "Perdida", "Pendiente")
+
+# Formato de salida esperado:
+Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
+
+```json
+{
+  "ID_Ticket": "123456",
+  "Deporte": "Fútbol",
+  "Evento": "Barcelona vs Real Madrid",
+  "Mercado": "Ganador del partido",
+  "Seleccion": "Barcelona",
+  "Cuota": "1.80",
+  "Monto_Apostado": "€50",
+  "Ganancia_Potencial": "€90",
+  "Estado_Apuesta": "Pendiente"
+}
+```
+
+# Ejemplos adicionales:
+
+Ejemplo 1 (Tenis):
+```json
+{
+  "ID_Ticket": "789012",
+  "Deporte": "Tenis",
+  "Evento": "Nadal vs Djokovic",
+  "Mercado": "Ganador del partido",
+  "Seleccion": "Nadal",
+  "Cuota": "2.10",
+  "Monto_Apostado": "€30",
+  "Ganancia_Potencial": "€63",
+  "Estado_Apuesta": "Ganada"
+}
+```
+
+Ejemplo 2 (Campos no identificados):
+```json
+{
+  "ID_Ticket": "No especificado",
+  "Deporte": "Baloncesto",
+  "Evento": "Lakers vs Bulls",
+  "Mercado": "Total puntos",
+  "Seleccion": "Más de 198.5",
+  "Cuota": "1.90",
+  "Monto_Apostado": "No especificado",
+  "Ganancia_Potencial": "No especificado",
+  "Estado_Apuesta": "Pendiente"
+}
+```
+
+# Reglas importantes:
+1. SIEMPRE devuelve un objeto JSON con TODOS los campos.
+2. Si no puedes identificar un campo, usa EXACTAMENTE "No especificado" como valor.
+3. Mantén los nombres de los campos EXACTAMENTE como se muestran en los ejemplos.
+4. Las cuotas deben ser strings con formato decimal (ej: "1.90", "2.10").
+5. Los montos deben incluir el símbolo de la moneda (ej: "€50", "€100").
+6. El estado de la apuesta debe ser "Ganada", "Perdida" o "Pendiente"."""
+            try:
+                analysis_result = await self.openai_handler.analyze_image(image_path, extraction_prompt)
+                logger.info(f"✅ Análisis de imagen completado: {filename}")
+            except Exception as e:
+                logger.error(f"❌ Error en análisis de imagen: {e}")
+                analysis_result = "Error en el análisis"
+
+            # 4. CREAR REGISTRO EN NOTION CON INFORMACIÓN COMPLETA
             await status.edit_text("📝 Creando registro en Notion...")
-            page_id = await self._create_notion_record(message, filename, file_upload_id, message_data)
+            page_id = await self._create_notion_record(message, filename, file_upload_id, message_data, analysis_result)
             if not page_id:
                 await status.edit_text("❌ Error creando registro")
                 return
             
-            # 4. CONFIRMACIÓN FINAL CON INFORMACIÓN DE REENVÍO
+            # 5. CONFIRMACIÓN FINAL CON INFORMACIÓN DE REENVÍO
             user_name = self._get_user_name(message)
+            
+            # Agregar resultado del análisis al mensaje de éxito
             success_message = (
                 f"✅ **¡Imagen procesada exitosamente!**\n\n"
                 f"📄 **Registro creado en Notion**\n"
                 f"👤 **Usuario**: {user_name}\n"
                 f"📁 **Archivo**: `{filename}`\n"
-                f"🆔 **Page ID**: `{page_id[:20]}...`"
+                f"🆔 **Page ID**: `{page_id[:20]}...`\n\n"
+                f"🔍 **Análisis de la imagen**:\n```json\n{analysis_result}\n```"
             )
+            # success_message ya está definido arriba
             
             # Agregar información de reenvío si aplica
             forward_response = self._format_forward_response(message_data.get("forwarding", {}))
@@ -559,9 +649,9 @@ class TelegramNotionBot:
     # CREACIÓN DE REGISTROS EN NOTION
     # =============================================================================
     
-    async def _create_notion_record(self, message: Message, filename: str, file_upload_id: str, message_data: Optional[dict] = None) -> Optional[str]:
+    async def _create_notion_record(self, message: Message, filename: str, file_upload_id: str, message_data: Optional[dict] = None, analysis_result: Optional[str] = None) -> Optional[str]:
         """
-        PASO 3: Crear registro en Notion con archivo real adjunto y información completa de reenvío
+        PASO 3: Crear registro en Notion con archivo real adjunto, información completa de reenvío y análisis de OpenAI
         """
         try:
             logger.info("3️⃣ Creando registro con archivo real adjunto...")
@@ -634,13 +724,45 @@ class TelegramNotionBot:
             
             market_info = "\n".join(additional_info)
             
+            # Procesar el resultado del análisis si está disponible
+            analyzed_data = {}
+            if analysis_result:
+                try:
+                    if isinstance(analysis_result, str):
+                        # Eliminar posibles marcadores de código
+                        cleaned_json = analysis_result.replace('```json', '').replace('```', '').strip()
+                        logger.info(f"Intentando parsear JSON: {cleaned_json}")
+                        analyzed_data = json.loads(cleaned_json)
+                        logger.info(f"JSON parseado exitosamente: {analyzed_data}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error decodificando JSON del análisis: {e}\nJSON recibido: {analysis_result}")
+                except Exception as e:
+                    logger.error(f"Error inesperado procesando JSON: {e}\nJSON recibido: {analysis_result}")
+
+            # Extraer y limpiar valores del análisis
+            cuota = "0"
+            monto = "0"
+            if analyzed_data:
+                cuota = analyzed_data.get("Cuota", "0").replace(",", ".")
+                monto = analyzed_data.get("Monto_Apostado", "0").replace("€", "").strip()
+            
+            try:
+                cuota = float(cuota)
+            except ValueError:
+                cuota = 0
+                
+            try:
+                monto = float(monto or "0")
+            except ValueError:
+                monto = 0
+
             # Propiedades del registro (usando nombres correctos de la base de datos)
             properties = {
                 "Evento / Selección": {
                     "title": [
                         {
                             "text": {
-                                "content": title
+                                "content": analyzed_data.get("Evento", title)
                             }
                         }
                     ]
@@ -676,15 +798,26 @@ class TelegramNotionBot:
                         }
                     ]
                 },
-                # Información adicional (incluyendo información de reenvío)
-                "Mercado / Selección": {
+                "Mercado": {
                     "rich_text": [
                         {
                             "text": {
-                                "content": market_info
+                                "content": analyzed_data.get("Mercado", "")
                             }
                         }
                     ]
+                },
+                "Seleccion": {
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": analyzed_data.get("Seleccion", "")
+                            }
+                        }
+                    ]
+                },
+                "Cuota": {
+                    "number": float(analyzed_data.get("Cuota", "0").replace(",", "."))
                 },
                 "Importe apostado": {
                     "number": 500
