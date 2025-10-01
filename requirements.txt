@@ -6,6 +6,7 @@ python-dotenv>=1.0.0
 notion-client>=2.2.1
 Pillow>=10.0.0
 aiohttp>=3.8.0
+openai>=1.3.0  # Para la integración con OpenAI
 
 # Development dependencies
 pytest>=7.0.0

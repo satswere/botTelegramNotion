@@ -176,6 +176,9 @@ class NotionRealUploadTester:
                             }
                         }
                     ]
+                },
+                "Importe Apostado": {
+                    "number": 500
                 }
             }
             
