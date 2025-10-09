@@ -102,7 +102,17 @@ class TelegramNotionBot:
         # Inicializar OpenAI handler
         self.openai_handler = OpenAIHandler()
         
+        # Sistema de cola para procesar imágenes
+        self.processing_queue = asyncio.Queue()
+        self.is_processing = False
+        self.queue_task = None
+        
+        # Configuración de la cola
+        self.max_concurrent_processing = 1  # Procesar 1 imagen a la vez para evitar rate limiting
+        self.delay_between_messages = 1.0  # Segundos entre mensajes
+        
         logger.info(f"📁 Carpeta de imágenes: {self.images_path.absolute()}")
+        logger.info(f"⚙️ Cola de procesamiento: máximo {self.max_concurrent_processing} imagen(es) simultánea(s)")
         logger.info("✅ Bot inicializado correctamente")
     
     def _validate_config(self):
@@ -379,50 +389,116 @@ class TelegramNotionBot:
             database_name = "Error"
             notion_status = f"❌ Error: {str(e)[:50]}..."
         
+        # Estado de la cola
+        queue_size = self.processing_queue.qsize()
+        queue_status = f"{queue_size} imagen(es) en espera" if queue_size > 0 else "✅ Vacía"
+        
         status_message = (
             f"📊 **Estado del Sistema**\n\n"
             f"🤖 **Bot**: ✅ Activo\n"
             f"📝 **Notion**: {notion_status}\n"
             f"🗃️ **Base de datos**: {database_name}\n"
             f"📁 **Carpeta**: {self.images_path.name}/\n"
-            f"📸 **Imágenes guardadas**: {len(list(self.images_path.glob('*')))}\n\n"
+            f"📸 **Imágenes guardadas**: {len(list(self.images_path.glob('*')))}\n"
+            f"⏳ **Cola de procesamiento**: {queue_status}\n\n"
             f"🔧 **ID Base de datos**: `{self.database_id}`"
         )
         await update.message.reply_text(status_message, parse_mode='Markdown')
     
     # =============================================================================
-    # PROCESAMIENTO DE IMÁGENES
+    # SISTEMA DE COLA PARA PROCESAMIENTO
     # =============================================================================
     
+    async def queue_processor(self):
+        """Procesa la cola de imágenes de manera secuencial"""
+        logger.info("🔄 Iniciando procesador de cola...")
+        
+        while True:
+            try:
+                # Obtener siguiente tarea de la cola
+                task_data = await self.processing_queue.get()
+                
+                if task_data is None:  # Señal de parada
+                    break
+                
+                update, context = task_data
+                queue_size = self.processing_queue.qsize()
+                
+                logger.info(f"📦 Procesando imagen desde cola (quedan {queue_size} en espera)")
+                
+                # Procesar la imagen
+                await self._process_image_internal(update, context)
+                
+                # Marcar tarea como completada
+                self.processing_queue.task_done()
+                
+                # Pequeña pausa entre procesamiento para evitar rate limiting
+                if queue_size > 0:
+                    await asyncio.sleep(self.delay_between_messages)
+                    
+            except Exception as e:
+                logger.error(f"❌ Error en procesador de cola: {e}")
+                self.processing_queue.task_done()
+    
     async def handle_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Procesa imágenes recibidas y las sube a Notion"""
+        """Recibe imágenes y las agrega a la cola de procesamiento"""
         message = update.message
         if not message:
             return
         
-        # Mensaje de estado
-        status = await message.reply_text("🔄 Procesando imagen...")
+        # Agregar a la cola
+        queue_size = self.processing_queue.qsize()
+        await self.processing_queue.put((update, context))
+        
+        # Informar al usuario sobre la posición en la cola
+        if queue_size == 0:
+            try:
+                await message.reply_text("🔄 Procesando tu imagen...")
+            except Exception as e:
+                logger.warning(f"No se pudo enviar mensaje de estado: {e}")
+        else:
+            try:
+                await message.reply_text(f"⏳ Tu imagen está en la cola. Posición: {queue_size + 1}")
+            except Exception as e:
+                logger.warning(f"No se pudo enviar mensaje de cola: {e}")
+        
+        logger.info(f"📥 Imagen agregada a la cola (total en cola: {queue_size + 1})")
+    
+    async def _process_image_internal(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Procesa una imagen internamente (llamado por el procesador de cola)"""
+        message = update.message
+        if not message:
+            return
+        
+        # Mensaje de estado inicial (solo uno para evitar rate limiting)
+        status = None
+        try:
+            status = await message.reply_text("🔄 Procesando imagen...")
+        except Exception as e:
+            logger.warning(f"No se pudo enviar mensaje de estado: {e}")
         
         try:
             # 0. EXTRAER INFORMACIÓN COMPLETA DEL MENSAJE (incluye reenvío)
             message_data = self._extract_forward_info(message)
             
             # 1. DESCARGAR IMAGEN
-            await status.edit_text("⬇️ Descargando imagen...")
+            logger.info("⬇️ Descargando imagen...")
             filename = await self._download_image(message)
             if not filename:
-                await status.edit_text("❌ Error descargando imagen")
+                if status:
+                    await status.edit_text("❌ Error descargando imagen")
                 return
             
             # 2. SUBIR A NOTION (PROCESO REAL)
-            await status.edit_text("🔄 Subiendo archivo a Notion...")
+            logger.info("🔄 Subiendo archivo a Notion...")
             file_upload_id = await self._upload_file_to_notion(filename)
             if not file_upload_id:
-                await status.edit_text("❌ Error subiendo archivo")
+                if status:
+                    await status.edit_text("❌ Error subiendo archivo")
                 return
             
             # 3. ANALIZAR IMAGEN CON OPENAI
-            await status.edit_text("🔍 Analizando imagen con OpenAI...")
+            logger.info("🔍 Analizando imagen con OpenAI...")
             image_path = str(self.images_path / filename)
             extraction_prompt = """Eres un sistema de extracción de campos para tickets de apuesta generados por Bet365. Tu tarea es identificar y extraer información clave a partir de un texto que describe los detalles de un ticket. La información debe estructurarse en campos específicos según el formato definido.
 
@@ -502,11 +578,15 @@ Ejemplo 2 (Campos no identificados):
                 analysis_result = "Error en el análisis"
 
             # 4. CREAR REGISTRO EN NOTION CON INFORMACIÓN COMPLETA
-            await status.edit_text("📝 Creando registro en Notion...")
+            logger.info("📝 Creando registro en Notion...")
             page_id = await self._create_notion_record(message, filename, file_upload_id, message_data, analysis_result)
             if not page_id:
-                await status.edit_text("❌ Error creando registro")
+                if status:
+                    await status.edit_text("❌ Error creando registro")
                 return
+            
+            # 4.5. ELIMINAR IMAGEN TEMPORAL DESPUÉS DE SUBIR EXITOSAMENTE
+            await self._delete_temp_image(filename)
             
             # 5. CONFIRMACIÓN FINAL CON INFORMACIÓN DE REENVÍO
             user_name = self._get_user_name(message)
@@ -529,7 +609,17 @@ Ejemplo 2 (Campos no identificados):
             
             success_message += "\n\n🔗 Revisa tu base de datos de Notion para ver el registro completo."
             
-            await status.edit_text(success_message, parse_mode='Markdown')
+            # Enviar mensaje final (evitando rate limiting)
+            if status:
+                try:
+                    await status.edit_text(success_message, parse_mode='Markdown')
+                except Exception as e:
+                    logger.warning(f"No se pudo editar mensaje de estado: {e}")
+                    # Intentar enviar un nuevo mensaje
+                    try:
+                        await message.reply_text(success_message, parse_mode='Markdown')
+                    except Exception as e2:
+                        logger.error(f"No se pudo enviar mensaje de éxito: {e2}")
             
             # Log con información completa
             self._log_message_info(message_data, True, filename)
@@ -537,7 +627,11 @@ Ejemplo 2 (Campos no identificados):
             
         except Exception as e:
             logger.error(f"❌ Error procesando imagen: {e}")
-            await status.edit_text(f"❌ Error: {str(e)[:100]}...")
+            if status:
+                try:
+                    await status.edit_text(f"❌ Error: {str(e)[:100]}...")
+                except Exception:
+                    logger.error("No se pudo enviar mensaje de error")
     
     async def _download_image(self, message: Message) -> Optional[str]:
         """Descarga la imagen del mensaje y devuelve el nombre del archivo"""
@@ -850,6 +944,31 @@ Ejemplo 2 (Campos no identificados):
     # UTILIDADES
     # =============================================================================
     
+    async def _delete_temp_image(self, filename: str) -> bool:
+        """
+        Elimina una imagen de la carpeta temporal después de subirla a Notion
+        
+        Args:
+            filename: Nombre del archivo a eliminar
+            
+        Returns:
+            bool: True si se eliminó exitosamente, False en caso contrario
+        """
+        try:
+            file_path = self.images_path / filename
+            
+            if file_path.exists():
+                file_path.unlink()  # Eliminar el archivo
+                logger.info(f"🗑️ Imagen temporal eliminada: {filename}")
+                return True
+            else:
+                logger.warning(f"⚠️ Archivo no encontrado para eliminar: {filename}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error eliminando imagen temporal {filename}: {e}")
+            return False
+    
     def _log_message_info(self, message_data: dict, has_image: bool, filename: Optional[str] = None):
         """Registra información completa del mensaje procesado"""
         try:
@@ -949,6 +1068,26 @@ Ejemplo 2 (Campos no identificados):
     # EJECUCIÓN DEL BOT
     # =============================================================================
     
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja errores globales de la aplicación"""
+        logger.error(f"Error en actualización: {context.error}")
+        
+        # Manejar rate limiting específicamente
+        if "RetryAfter" in str(type(context.error).__name__):
+            retry_after = getattr(context.error, 'retry_after', 20)
+            logger.warning(f"⚠️ Rate limit alcanzado. Esperando {retry_after} segundos...")
+            await asyncio.sleep(retry_after)
+            return
+        
+        # Para otros errores, solo loguear
+        if isinstance(update, Update) and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "❌ Ocurrió un error procesando tu mensaje. Por favor intenta de nuevo."
+                )
+            except Exception:
+                logger.error("No se pudo enviar mensaje de error al usuario")
+    
     def run(self):
         """Inicia el bot y lo mantiene funcionando"""
         logger.info("🚀 Iniciando aplicación de Telegram...")
@@ -958,6 +1097,9 @@ Ejemplo 2 (Campos no identificados):
             raise ValueError("Token de Telegram no disponible")
             
         application = Application.builder().token(self.telegram_token).build()
+        
+        # Agregar manejador de errores PRIMERO
+        application.add_error_handler(self.error_handler)
         
         # Agregar handlers
         application.add_handler(CommandHandler("start", self.cmd_start))
@@ -982,9 +1124,29 @@ Ejemplo 2 (Campos no identificados):
         print("="*60)
         print(f"📁 Carpeta de imágenes: {self.images_path.absolute()}")
         print(f"🗃️ Base de datos Notion: {self.database_id}")
+        print(f"⚙️  Sistema de cola: {self.max_concurrent_processing} imagen(es) simultánea(s)")
         print("📸 Envía imágenes al bot para procesarlas")
         print("⏹️  Presiona Ctrl+C para detener")
         print("="*60)
+        
+        # Iniciar procesador de cola en segundo plano
+        async def post_init(app):
+            """Inicia el procesador de cola después de que la app se inicializa"""
+            self.queue_task = asyncio.create_task(self.queue_processor())
+            logger.info("✅ Procesador de cola iniciado")
+        
+        async def post_shutdown(app):
+            """Detiene el procesador de cola al cerrar"""
+            if self.queue_task and not self.queue_task.done():
+                await self.processing_queue.put(None)  # Señal de parada
+                try:
+                    await asyncio.wait_for(self.queue_task, timeout=5.0)
+                except asyncio.TimeoutError:
+                    self.queue_task.cancel()
+                logger.info("✅ Procesador de cola detenido")
+        
+        application.post_init = post_init
+        application.post_shutdown = post_shutdown
         
         # Iniciar polling
         try:
