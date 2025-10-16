@@ -4,10 +4,27 @@ OpenAI Image Analyzer Adapter
 Implements IImageAnalyzer interface wrapping the existing OpenAIHandler.
 This adapter follows the Dependency Inversion Principle by depending on the
 domain interface rather than concrete implementation details.
+
+Error Handling Strategy:
+- OpenAIAnalyzerError: Custom exception for this adapter
+- Handles aiohttp.ClientError for network issues
+- Handles KeyError for malformed API responses
+- Handles FileNotFoundError for missing image files
+- Comprehensive logging at debug, info, warning, and error levels
 """
 from typing import Dict, Any
+import logging
+import json
+import aiohttp
 from domain.repositories.image_analyzer import IImageAnalyzer
 from testingApi.openai_handler import OpenAIHandler
+
+logger = logging.getLogger(__name__)
+
+
+class OpenAIAnalyzerError(Exception):
+    """Error específico del analizador de imágenes OpenAI."""
+    pass
 
 
 class OpenAIImageAnalyzer(IImageAnalyzer):
@@ -35,13 +52,34 @@ class OpenAIImageAnalyzer(IImageAnalyzer):
             Analysis result as string (may be JSON formatted)
             
         Raises:
-            Exception: If analysis fails
+            OpenAIAnalyzerError: If analysis fails due to API, network, or file issues
         """
-        return await self._handler.analyze_image(
-            image_path=image_path,
-            prompt=prompt,
-            system_prompt=system_prompt
-        )
+        logger.debug(f"🔍 Analizando imagen: {image_path[:50]}...")
+        
+        try:
+            result = await self._handler.analyze_image(
+                image_path=image_path,
+                prompt=prompt,
+                system_prompt=system_prompt
+            )
+            logger.info(f"✅ Imagen analizada exitosamente (longitud: {len(result)} chars)")
+            return result
+            
+        except FileNotFoundError as e:
+            logger.error(f"❌ Archivo de imagen no encontrado: {image_path}")
+            raise OpenAIAnalyzerError(f"Imagen no encontrada: {image_path}") from e
+            
+        except aiohttp.ClientError as e:
+            logger.error(f"❌ Error de red al conectar con OpenAI API: {e}")
+            raise OpenAIAnalyzerError(f"Error de conexión con OpenAI: {str(e)}") from e
+            
+        except KeyError as e:
+            logger.error(f"❌ Respuesta malformada de OpenAI API - clave faltante: {e}")
+            raise OpenAIAnalyzerError(f"Respuesta inválida de OpenAI API") from e
+            
+        except Exception as e:
+            logger.error(f"❌ Error inesperado analizando imagen: {e}", exc_info=True)
+            raise OpenAIAnalyzerError(f"Error analizando imagen: {str(e)}") from e
     
     async def extract_bet_info(self, image_path: str) -> Dict[str, Any]:
         """
@@ -54,8 +92,10 @@ class OpenAIImageAnalyzer(IImageAnalyzer):
             Dictionary with bet details extracted from image
             
         Raises:
-            Exception: If extraction fails
+            OpenAIAnalyzerError: If extraction or JSON parsing fails
         """
+        logger.debug(f"📊 Extrayendo información de apuesta desde imagen: {image_path[:50]}...")
+        
         system_prompt = (
             "Eres un asistente especializado en analizar capturas de apuestas deportivas. "
             "Debes extraer información estructurada de las imágenes."
@@ -76,19 +116,37 @@ class OpenAIImageAnalyzer(IImageAnalyzer):
         Si algún campo no es visible en la imagen, usa null como valor.
         """
         
-        result = await self._handler.analyze_image(
-            image_path=image_path,
-            prompt=prompt,
-            system_prompt=system_prompt
-        )
-        
-        # OpenAIHandler already handles JSON cleaning and validation
-        import json
         try:
-            return json.loads(result)
-        except json.JSONDecodeError:
-            # If result is not valid JSON, wrap it in a structured format
-            return {
-                "raw_analysis": result,
-                "error": "Could not parse structured data from response"
-            }
+            result = await self._handler.analyze_image(
+                image_path=image_path,
+                prompt=prompt,
+                system_prompt=system_prompt
+            )
+            
+            logger.debug(f"🔄 Parseando respuesta JSON de OpenAI...")
+            
+            # OpenAIHandler already handles JSON cleaning and validation
+            try:
+                parsed_data = json.loads(result)
+                logger.info(f"✅ Información de apuesta extraída exitosamente: {list(parsed_data.keys())}")
+                return parsed_data
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Respuesta no es JSON válido - envolviendo en formato estructurado")
+                # If result is not valid JSON, wrap it in a structured format
+                return {
+                    "raw_analysis": result,
+                    "error": "Could not parse structured data from response"
+                }
+                
+        except FileNotFoundError as e:
+            logger.error(f"❌ Archivo de imagen no encontrado: {image_path}")
+            raise OpenAIAnalyzerError(f"Imagen no encontrada: {image_path}") from e
+            
+        except aiohttp.ClientError as e:
+            logger.error(f"❌ Error de red extrayendo información de apuesta: {e}")
+            raise OpenAIAnalyzerError(f"Error de conexión con OpenAI: {str(e)}") from e
+            
+        except Exception as e:
+            logger.error(f"❌ Error inesperado extrayendo información de apuesta: {e}", exc_info=True)
+            raise OpenAIAnalyzerError(f"Error extrayendo información: {str(e)}") from e

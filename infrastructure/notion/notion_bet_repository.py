@@ -1,11 +1,22 @@
-"""Notion Bet Repository - Implementa IBetRepository"""
+"""
+Notion Bet Repository
+
+Implementa IBetRepository para persistencia en Notion.
+Maneja errores de API y proporciona logging detallado.
+"""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from notion_client import Client
+from notion_client.errors import APIResponseError
 
 logger = logging.getLogger(__name__)
+
+
+class NotionRepositoryError(Exception):
+    """Error específico del repositorio Notion."""
+    pass
 
 
 class NotionBetRepository:
@@ -16,8 +27,20 @@ class NotionBetRepository:
         self.database_id = database_id
     
     async def save(self, bet_data: Dict[str, Any]) -> str:
-        """Guarda una apuesta en Notion"""
+        """
+        Guarda una apuesta en Notion.
+        
+        Args:
+            bet_data: Datos de la apuesta a guardar
+            
+        Returns:
+            ID de la página creada en Notion
+            
+        Raises:
+            NotionRepositoryError: Si falla la creación
+        """
         try:
+            logger.debug(f"💾 Guardando apuesta en Notion: {bet_data.get('title', 'Sin título')}")
             properties = self._map_to_notion_properties(bet_data)
             
             response = self.client.pages.create(
@@ -27,29 +50,63 @@ class NotionBetRepository:
             
             if isinstance(response, dict) and "id" in response:
                 page_id = response["id"]
-                logger.info(f"✅ Apuesta guardada: {page_id}")
+                logger.info(f"✅ Apuesta guardada exitosamente: {page_id}")
                 return page_id
             else:
-                raise Exception("Respuesta inesperada de Notion API")
+                error_msg = "Respuesta inesperada de Notion API"
+                logger.error(f"❌ {error_msg}: {response}")
+                raise NotionRepositoryError(error_msg)
                 
+        except APIResponseError as e:
+            logger.error(f"❌ Error de API de Notion: {e.code} - {str(e)}")
+            raise NotionRepositoryError(f"Error de Notion API: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error guardando apuesta: {e}")
-            raise
+            logger.error(f"❌ Error inesperado guardando apuesta: {e}", exc_info=True)
+            raise NotionRepositoryError(f"Error guardando apuesta: {str(e)}") from e
     
     async def find_by_id(self, bet_id: str) -> Optional[Dict[str, Any]]:
-        """Busca una apuesta por ID"""
+        """
+        Busca una apuesta por ID.
+        
+        Args:
+            bet_id: ID de la página de Notion
+            
+        Returns:
+            Datos de la apuesta o None si no existe
+        """
         try:
+            logger.debug(f"🔍 Buscando apuesta: {bet_id}")
             response = self.client.pages.retrieve(bet_id)
             if response:
+                logger.info(f"✅ Apuesta encontrada: {bet_id}")
                 return self._map_from_notion_page(response)
             return None
+        except APIResponseError as e:
+            if e.code == "object_not_found":
+                logger.warning(f"⚠️ Apuesta no encontrada: {bet_id}")
+                return None
+            logger.error(f"❌ Error de API buscando apuesta {bet_id}: {str(e)}")
+            raise NotionRepositoryError(f"Error buscando apuesta: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error buscando apuesta {bet_id}: {e}")
-            return None
+            logger.error(f"❌ Error inesperado buscando apuesta {bet_id}: {e}", exc_info=True)
+            raise NotionRepositoryError(f"Error buscando apuesta: {str(e)}") from e
     
     async def update_status(self, bet_id: str, new_status: str) -> bool:
-        """Actualiza el estado de una apuesta"""
+        """
+        Actualiza el estado de una apuesta.
+        
+        Args:
+            bet_id: ID de la apuesta
+            new_status: Nuevo estado
+            
+        Returns:
+            True si se actualizó correctamente
+            
+        Raises:
+            NotionRepositoryError: Si falla la actualización
+        """
         try:
+            logger.debug(f"🔄 Actualizando estado de {bet_id} a {new_status}")
             self.client.pages.update(
                 page_id=bet_id,
                 properties={
@@ -60,9 +117,12 @@ class NotionBetRepository:
             )
             logger.info(f"✅ Estado actualizado: {bet_id} -> {new_status}")
             return True
+        except APIResponseError as e:
+            logger.error(f"❌ Error de API actualizando estado: {e.code} - {str(e)}")
+            raise NotionRepositoryError(f"Error actualizando estado: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error actualizando estado: {e}")
-            return False
+            logger.error(f"❌ Error inesperado actualizando estado: {e}", exc_info=True)
+            raise NotionRepositoryError(f"Error actualizando estado: {str(e)}") from e
     
     async def find_all(
         self, 
