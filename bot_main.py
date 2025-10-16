@@ -1,4 +1,51 @@
 #!/usr/bin/env python3
+"""
+⚠️  DEPRECATED - USE main.py INSTEAD ⚠️
+=======================================
+
+This file is deprecated and will be removed in a future version.
+Please use the new unified entry point:
+
+    python main.py
+
+The new main.py provides:
+- Cleaner architecture with better separation of concerns
+- Improved dependency injection
+- Better error handling
+- Enhanced logging
+- Modern code structure
+
+For migration guide, see: README.md
+"""
+
+import sys
+import warnings
+
+# Show deprecation warning
+warnings.warn(
+    "bot_main.py is deprecated. Use 'python main.py' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+print("=" * 70)
+print("⚠️  DEPRECATION WARNING")
+print("=" * 70)
+print("")
+print("This script (bot_main.py) is deprecated and will be removed soon.")
+print("")
+print("Please use the new unified entry point instead:")
+print("    python main.py")
+print("")
+print("The application will start in 5 seconds...")
+print("Press Ctrl+C to cancel.")
+print("=" * 70)
+print("")
+
+import time
+time.sleep(5)
+
+# Original code follows
 import json
 
 """

@@ -4,6 +4,7 @@ Bet Entity (Aggregate Root)
 Core domain entity representing a sports bet.
 Encapsulates all bet-related business logic and validation.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -18,83 +19,85 @@ from .forward_metadata import ForwardMetadata
 class Bet:
     """
     Aggregate Root for Bet domain.
-    
+
     A Bet represents a sports betting transaction with associated
     images, analysis, and metadata.
     """
-    
+
     # Identity
     id: Optional[str] = None
-    
+
     # Core bet information
     event: str = "No especificado"
     bet_type: str = "No especificado"
     stake: Optional[Money] = None
     odds: Optional[Odds] = None
     potential_profit: Optional[Money] = None
-    
+
     # Status
     status: BetStatus = field(default_factory=BetStatus.pending)
-    
+
     # Associated entities
     images: List[BetImage] = field(default_factory=list)
     forward_metadata: Optional[ForwardMetadata] = None
-    
+
     # Telegram metadata
     telegram_user_id: Optional[int] = None
     telegram_username: Optional[str] = None
     telegram_message_id: Optional[int] = None
-    
+
     # Timestamps
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     event_date: Optional[datetime] = None
-    
+
     # Additional data
     notes: Optional[str] = None
     raw_analysis: Optional[Dict[str, Any]] = None
-    
+
     @property
     def has_images(self) -> bool:
         """Check if bet has associated images."""
         return len(self.images) > 0
-    
+
     @property
     def primary_image(self) -> Optional[BetImage]:
         """Get the first/primary image."""
         return self.images[0] if self.images else None
-    
+
     @property
     def is_analyzed(self) -> bool:
         """Check if bet has been analyzed."""
-        return bool(self.raw_analysis or (self.primary_image and self.primary_image.is_analyzed))
-    
+        return bool(
+            self.raw_analysis or (self.primary_image and self.primary_image.is_analyzed)
+        )
+
     @property
     def is_from_forwarded_message(self) -> bool:
         """Check if bet was created from a forwarded message."""
         return bool(self.forward_metadata and self.forward_metadata.is_forwarded)
-    
+
     @property
     def expected_return(self) -> Optional[Money]:
         """Calculate expected return (stake + profit)."""
         if not self.stake or not self.potential_profit:
             return None
         return self.stake + self.potential_profit
-    
+
     def add_image(self, image: BetImage) -> None:
         """Add an image to the bet."""
         if not image.is_valid_image:
             raise ValueError(f"Invalid image format: {image.filename}")
         self.images.append(image)
         self.updated_at = datetime.now()
-    
+
     def update_status(self, new_status: BetStatus) -> None:
         """
         Update bet status with validation.
-        
+
         Args:
             new_status: New status to set
-            
+
         Raises:
             ValueError: If status transition is invalid
         """
@@ -103,10 +106,10 @@ class Bet:
                 f"Cannot transition from {self.status} to {new_status}. "
                 "Settled bets cannot change status."
             )
-        
+
         self.status = new_status
         self.updated_at = datetime.now()
-    
+
     def calculate_profit(self) -> Optional[Money]:
         """
         Calculate actual profit based on stake and odds.
@@ -114,59 +117,59 @@ class Bet:
         """
         if not self.stake or not self.odds:
             return None
-        
+
         profit_factor = self.odds.calculate_profit_factor()
         return self.stake.multiply(profit_factor)
-    
+
     def set_forward_metadata(self, metadata: ForwardMetadata) -> None:
         """Set forwarding metadata for the bet."""
         self.forward_metadata = metadata
         self.updated_at = datetime.now()
-    
+
     def update_from_analysis(self, analysis_data: Dict[str, Any]) -> None:
         """
         Update bet details from image analysis results.
-        
+
         Args:
             analysis_data: Dictionary with analyzed bet information
         """
         self.raw_analysis = analysis_data
-        
+
         # Update fields if present in analysis
         if "evento" in analysis_data and analysis_data["evento"]:
             self.event = analysis_data["evento"]
-        
+
         if "tipo_apuesta" in analysis_data and analysis_data["tipo_apuesta"]:
             self.bet_type = analysis_data["tipo_apuesta"]
-        
+
         if "cuota" in analysis_data:
             odds = Odds.from_string(str(analysis_data["cuota"]))
             if odds:
                 self.odds = odds
-        
+
         if "monto" in analysis_data:
             stake = Money.from_string(str(analysis_data["monto"]))
             if stake:
                 self.stake = stake
-        
+
         if "ganancia_potencial" in analysis_data:
             profit = Money.from_string(str(analysis_data["ganancia_potencial"]))
             if profit:
                 self.potential_profit = profit
-        
+
         if "estado" in analysis_data:
             status = BetStatus.from_string(str(analysis_data["estado"]))
             if status:
                 self.status = status
-        
+
         if "fecha" in analysis_data and analysis_data["fecha"]:
             try:
                 self.event_date = datetime.fromisoformat(str(analysis_data["fecha"]))
             except (ValueError, TypeError):
                 pass
-        
+
         self.updated_at = datetime.now()
-    
+
     @classmethod
     def create_from_telegram(
         cls,
@@ -174,18 +177,18 @@ class Bet:
         telegram_username: Optional[str],
         telegram_message_id: int,
         image: Optional[BetImage] = None,
-        forward_metadata: Optional[ForwardMetadata] = None
-    ) -> 'Bet':
+        forward_metadata: Optional[ForwardMetadata] = None,
+    ) -> "Bet":
         """
         Create a new bet from a Telegram message.
-        
+
         Args:
             telegram_user_id: Telegram user ID
             telegram_username: Telegram username
             telegram_message_id: Telegram message ID
             image: Optional initial image
             forward_metadata: Optional forwarding metadata
-            
+
         Returns:
             New Bet instance
         """
@@ -195,14 +198,14 @@ class Bet:
             telegram_message_id=telegram_message_id,
             forward_metadata=forward_metadata,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
-        
+
         if image:
             bet.add_image(image)
-        
+
         return bet
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -211,10 +214,14 @@ class Bet:
             "bet_type": self.bet_type,
             "stake": self.stake.to_dict() if self.stake else None,
             "odds": self.odds.to_dict() if self.odds else None,
-            "potential_profit": self.potential_profit.to_dict() if self.potential_profit else None,
+            "potential_profit": (
+                self.potential_profit.to_dict() if self.potential_profit else None
+            ),
             "status": self.status.to_dict(),
             "images": [img.to_dict() for img in self.images],
-            "forward_metadata": self.forward_metadata.to_dict() if self.forward_metadata else None,
+            "forward_metadata": (
+                self.forward_metadata.to_dict() if self.forward_metadata else None
+            ),
             "telegram_user_id": self.telegram_user_id,
             "telegram_username": self.telegram_username,
             "telegram_message_id": self.telegram_message_id,
@@ -225,5 +232,7 @@ class Bet:
             "has_images": self.has_images,
             "is_analyzed": self.is_analyzed,
             "is_from_forwarded_message": self.is_from_forwarded_message,
-            "expected_return": self.expected_return.to_dict() if self.expected_return else None
+            "expected_return": (
+                self.expected_return.to_dict() if self.expected_return else None
+            ),
         }

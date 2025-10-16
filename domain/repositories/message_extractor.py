@@ -12,29 +12,29 @@ from datetime import datetime
 class IMessageExtractor(Protocol):
     """
     Puerto (Interface) para extracción de datos de mensajes.
-    
+
     Esta interfaz define las operaciones para extraer información
     de mensajes sin depender de una plataforma específica.
-    
+
     Implementaciones:
         - TelegramMessageExtractor (actual)
         - DiscordMessageExtractor (futuro)
         - WhatsAppMessageExtractor (futuro)
         - MockMessageExtractor (tests)
-    
+
     Ejemplo de uso:
         >>> extractor = TelegramMessageExtractor()
         >>> metadata = extractor.extract_metadata(telegram_message)
         >>> print(metadata["user_name"])
     """
-    
+
     def extract_metadata(self, message: Any) -> Dict[str, Any]:
         """
         Extrae metadatos del mensaje de forma genérica.
-        
+
         Args:
             message: Objeto de mensaje (tipo específico de la plataforma)
-            
+
         Returns:
             Dict con metadatos extraídos:
                 - message_id: str - ID único del mensaje
@@ -48,7 +48,7 @@ class IMessageExtractor(Protocol):
                 - forward_info: Optional[Dict] - Info del mensaje original
                 - has_media: bool - Si tiene archivos adjuntos
                 - text: Optional[str] - Texto del mensaje
-                
+
         Example:
             >>> metadata = extractor.extract_metadata(message)
             >>> print(f"Usuario: {metadata['user_name']}")
@@ -57,14 +57,14 @@ class IMessageExtractor(Protocol):
             ...     print(f"Reenviado de: {metadata['forward_info']['from']}")
         """
         ...
-    
+
     def extract_forward_info(self, message: Any) -> Optional[Dict[str, Any]]:
         """
         Extrae información detallada de mensajes reenviados.
-        
+
         Args:
             message: Objeto de mensaje
-            
+
         Returns:
             Dict con información de reenvío o None si no es reenviado:
                 - origin_user_id: Optional[str] - ID usuario original
@@ -75,7 +75,7 @@ class IMessageExtractor(Protocol):
                 - origin_date: Optional[datetime] - Fecha mensaje original
                 - is_anonymous: bool - Si el origen es anónimo
                 - unique_identifier: str - ID único del reenvío
-                
+
         Example:
             >>> forward_info = extractor.extract_forward_info(message)
             >>> if forward_info:
@@ -83,14 +83,14 @@ class IMessageExtractor(Protocol):
             ...     print(f"Fecha original: {forward_info['origin_date']}")
         """
         ...
-    
+
     async def extract_file(self, message: Any) -> Optional[Dict[str, Any]]:
         """
         Extrae información del archivo adjunto en el mensaje.
-        
+
         Args:
             message: Objeto de mensaje con archivo adjunto
-            
+
         Returns:
             Dict con información del archivo o None si no tiene:
                 - file_id: str - ID único del archivo
@@ -99,7 +99,7 @@ class IMessageExtractor(Protocol):
                 - mime_type: str - Tipo MIME
                 - file_type: str - Tipo (photo, document, video, etc.)
                 - download_url: Optional[str] - URL de descarga
-                
+
         Example:
             >>> file_info = await extractor.extract_file(message)
             >>> if file_info:
@@ -107,17 +107,17 @@ class IMessageExtractor(Protocol):
             ...     print(f"Tamaño: {file_info['file_size']} bytes")
         """
         ...
-    
+
     def is_valid_message(self, message: Any) -> bool:
         """
         Valida que el mensaje sea procesable.
-        
+
         Args:
             message: Objeto de mensaje
-            
+
         Returns:
             bool: True si es válido, False en caso contrario
-            
+
         Example:
             >>> if extractor.is_valid_message(message):
             ...     metadata = extractor.extract_metadata(message)

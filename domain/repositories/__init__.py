@@ -11,8 +11,8 @@ from .file_storage import IFileStorage
 from .message_extractor import IMessageExtractor
 
 __all__ = [
-    'IBetRepository',
-    'IImageAnalyzer',
-    'IFileStorage',
-    'IMessageExtractor',
+    "IBetRepository",
+    "IImageAnalyzer",
+    "IFileStorage",
+    "IMessageExtractor",
 ]

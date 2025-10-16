@@ -11,7 +11,7 @@ from .repositories import (
     IBetRepository,
     IImageAnalyzer,
     IFileStorage,
-    IMessageExtractor
+    IMessageExtractor,
 )
 from .entities import Bet, BetImage, ForwardMetadata
 from .value_objects import Money, Odds, BetStatus
@@ -19,18 +19,18 @@ from .services import BetValidator
 
 __all__ = [
     # Repositories (Ports)
-    'IBetRepository',
-    'IImageAnalyzer',
-    'IFileStorage',
-    'IMessageExtractor',
+    "IBetRepository",
+    "IImageAnalyzer",
+    "IFileStorage",
+    "IMessageExtractor",
     # Entities
-    'Bet',
-    'BetImage',
-    'ForwardMetadata',
+    "Bet",
+    "BetImage",
+    "ForwardMetadata",
     # Value Objects
-    'Money',
-    'Odds',
-    'BetStatus',
+    "Money",
+    "Odds",
+    "BetStatus",
     # Services
-    'BetValidator'
+    "BetValidator",
 ]

@@ -8,14 +8,11 @@ Orchestrates the complete workflow of processing a bet image:
 4. Create bet record
 5. Clean up temporary files
 """
+
 from typing import Optional, Dict, Any
 import json
 
-from domain.repositories import (
-    IImageAnalyzer,
-    IFileStorage,
-    IBetRepository
-)
+from domain.repositories import IImageAnalyzer, IFileStorage, IBetRepository
 from application.dtos import CreateBetDTO, ImageDTO, MessageDTO, BetDTO
 from .create_bet import CreateBetUseCase
 
@@ -23,20 +20,20 @@ from .create_bet import CreateBetUseCase
 class ProcessBetImageUseCase:
     """
     Use case for processing a bet image end-to-end.
-    
+
     This is the main orchestration use case that coordinates
     all the steps needed to process a betting image from Telegram.
     """
-    
+
     def __init__(
         self,
         image_analyzer: IImageAnalyzer,
         file_storage: IFileStorage,
-        bet_repository: IBetRepository
+        bet_repository: IBetRepository,
     ):
         """
         Initialize use case with required dependencies.
-        
+
         Args:
             image_analyzer: Service for AI image analysis
             file_storage: Service for file operations
@@ -45,36 +42,33 @@ class ProcessBetImageUseCase:
         self._image_analyzer = image_analyzer
         self._file_storage = file_storage
         self._create_bet_use_case = CreateBetUseCase(bet_repository)
-    
+
     async def execute(
-        self,
-        image_dto: ImageDTO,
-        message_dto: MessageDTO,
-        notion_file_id: str
+        self, image_dto: ImageDTO, message_dto: MessageDTO, notion_file_id: str
     ) -> BetDTO:
         """
         Process bet image through complete workflow.
-        
+
         Args:
             image_dto: Image file information
             message_dto: Telegram message information
             notion_file_id: ID of file uploaded to Notion
-            
+
         Returns:
             BetDTO with created bet information
-            
+
         Raises:
             Exception: If any step fails
         """
         analysis_data = None
-        
+
         try:
             # Step 1: Analyze image with AI
             analysis_result = await self._analyze_image(image_dto.file_path)
-            
+
             # Step 2: Parse analysis result
             analysis_data = self._parse_analysis_result(analysis_result)
-            
+
             # Step 3: Create bet with analysis data
             create_dto = CreateBetDTO(
                 telegram_user_id=message_dto.user_id,
@@ -84,33 +78,32 @@ class ProcessBetImageUseCase:
                 image_file_path=image_dto.file_path,
                 analysis_data=analysis_data,
                 message_metadata=message_dto.forward_metadata,
-                notion_file_id=notion_file_id
+                notion_file_id=notion_file_id,
             )
-            
+
             bet_dto = await self._create_bet_use_case.execute(create_dto)
-            
+
             return bet_dto
-            
+
         finally:
             # Step 4: Clean up temporary image file
             await self._cleanup_temp_file(image_dto.filename)
-    
+
     async def _analyze_image(self, image_path: str) -> str:
         """
         Analyze image using AI service.
-        
+
         Args:
             image_path: Path to image file
-            
+
         Returns:
             Analysis result as string
         """
         prompt = self._build_analysis_prompt()
         return await self._image_analyzer.analyze_image(
-            image_path=image_path,
-            prompt=prompt
+            image_path=image_path, prompt=prompt
         )
-    
+
     def _build_analysis_prompt(self) -> str:
         """Build the prompt for image analysis."""
         return """
@@ -133,14 +126,14 @@ Reglas importantes:
 5. Los montos deben incluir el símbolo de la moneda (ej: "€50", "€100").
 6. El estado debe ser "Ganada", "Perdida" o "Pendiente".
         """
-    
+
     def _parse_analysis_result(self, analysis_result: str) -> Dict[str, Any]:
         """
         Parse analysis result into structured data.
-        
+
         Args:
             analysis_result: Raw analysis string
-            
+
         Returns:
             Parsed dictionary
         """
@@ -156,13 +149,13 @@ Reglas importantes:
                 "cuota": "No especificado",
                 "monto": "No especificado",
                 "ganancia_potencial": "No especificado",
-                "estado": "Pendiente"
+                "estado": "Pendiente",
             }
-    
+
     async def _cleanup_temp_file(self, filename: str) -> None:
         """
         Clean up temporary image file.
-        
+
         Args:
             filename: Name of file to delete
         """

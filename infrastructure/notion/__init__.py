@@ -2,4 +2,4 @@
 
 from .notion_bet_repository import NotionBetRepository
 
-__all__ = ['NotionBetRepository']
+__all__ = ["NotionBetRepository"]

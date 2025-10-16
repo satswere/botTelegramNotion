@@ -3,24 +3,25 @@ Help Command Handler
 
 Maneja el comando /help mostrando ayuda detallada.
 """
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
 
 class HelpHandler:
     """Handler for /help command."""
-    
+
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         Handle /help command.
-        
+
         Args:
             update: Telegram update object
             context: Telegram context
         """
         if not update.message:
             return
-        
+
         help_message = (
             "🆘 **Ayuda del Bot**\n\n"
             "📸 **Para usar el bot:**\n"
@@ -37,4 +38,4 @@ class HelpHandler:
             "• **Mercado / Selección**: Texto adicional del mensaje\n\n"
             "⚠️ **Nota**: El bot solo procesa imágenes por ahora."
         )
-        await update.message.reply_text(help_message, parse_mode='Markdown')
+        await update.message.reply_text(help_message, parse_mode="Markdown")
