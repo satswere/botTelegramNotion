@@ -28,7 +28,8 @@ from infrastructure.storage import LocalFileStorage
 from infrastructure.openai import OpenAIImageAnalyzer
 
 # Application
-from application.use_cases import ProcessBetImageUseCase
+from application.use_cases import ProcessBetImageUseCase, UpdateBetStatusUseCase
+from application.orchestration import MessageProcessor, CommandOrchestrator
 
 # Presentation
 from presentation.handlers import (
@@ -116,32 +117,56 @@ class TelegramNotionBot:
         logger.info(f"📁 Carpeta de imágenes: {self.images_path.absolute()}")
     
     def _initialize_application_layer(self):
-        """Initialize application use cases."""
+        """Initialize application use cases and orchestrators."""
+        # Use cases
         self.process_bet_use_case = ProcessBetImageUseCase(
             image_analyzer=self.image_analyzer,
             file_storage=self.file_storage,
             bet_repository=self.bet_repository
         )
+        
+        self.update_bet_status_use_case = UpdateBetStatusUseCase(
+            bet_repository=self.bet_repository
+        )
+        
+        # Orchestrators
+        self.message_processor = MessageProcessor(
+            process_bet_use_case=self.process_bet_use_case,
+            message_extractor=self.message_extractor,
+            notion_client=self.notion_client,
+            database_id=self.database_id,
+            images_path=self.images_path
+        )
+        
+        self.command_orchestrator = CommandOrchestrator(
+            bet_repository=self.bet_repository,
+            update_bet_status_use_case=self.update_bet_status_use_case
+        )
+        
+        logger.info("✅ Capa de aplicación inicializada (use cases + orchestrators)")
     
     def _initialize_presentation_layer(self):
         """Initialize presentation handlers."""
         # Command handlers (stateless)
         self.start_handler = StartHandler()
         self.help_handler = HelpHandler()
+        
+        # Status handler (with orchestrator)
         self.status_handler = StatusHandler(
+            command_orchestrator=self.command_orchestrator,
             notion_client=self.notion_client,
             database_id=self.database_id,
             images_path=self.images_path,
             processing_queue=self.processing_queue
         )
         
-        # Image handler (with use case injection)
+        # Image handler (with message processor)
         self.image_handler = ImageHandler(
-            process_bet_use_case=self.process_bet_use_case,
-            message_extractor=self.message_extractor,
-            images_path=self.images_path,
+            message_processor=self.message_processor,
             processing_queue=self.processing_queue
         )
+        
+        logger.info("✅ Capa de presentación inicializada (handlers refactorizados)")
     
     async def queue_processor(self):
         """Process images from queue sequentially."""

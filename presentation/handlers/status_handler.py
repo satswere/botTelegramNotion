@@ -1,80 +1,123 @@
 """
-Status Command Handler
+Status Command Handler - Refactorizado
 
-Maneja el comando /status mostrando el estado del sistema.
+Maneja el comando /status usando el CommandOrchestrator.
+Delega la lógica de negocio al orquestador.
 """
+import logging
 from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
 from notion_client import Client
 
+from application.orchestration import CommandOrchestrator
+
+logger = logging.getLogger(__name__)
+
 
 class StatusHandler:
-    """Handler for /status command."""
+    """Handler para el comando /status (refactorizado)."""
     
     def __init__(
         self,
+        command_orchestrator: CommandOrchestrator,
         notion_client: Client,
         database_id: str,
         images_path: Path,
         processing_queue
     ):
         """
-        Initialize status handler.
+        Inicializa el handler de status.
         
         Args:
-            notion_client: Notion API client
-            database_id: Notion database ID
-            images_path: Path to images directory
-            processing_queue: Processing queue for images
+            command_orchestrator: Orquestador de comandos
+            notion_client: Cliente de Notion API
+            database_id: ID de la base de datos de Notion
+            images_path: Ruta al directorio de imágenes
+            processing_queue: Cola de procesamiento de imágenes
         """
+        self._orchestrator = command_orchestrator
         self._notion_client = notion_client
         self._database_id = database_id
         self._images_path = images_path
         self._processing_queue = processing_queue
+        
+        logger.info("📊 StatusHandler inicializado (refactorizado con CommandOrchestrator)")
     
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        Handle /status command.
+        Maneja el comando /status.
         
         Args:
-            update: Telegram update object
-            context: Telegram context
+            update: Update de Telegram
+            context: Contexto de Telegram
         """
         if not update.message:
             return
         
+        logger.info(f"📊 Comando /status recibido de usuario {update.message.from_user.id}")
+        
         try:
-            # Check Notion connection
-            if self._notion_client:
-                database = self._notion_client.databases.retrieve(self._database_id)
-                if isinstance(database, dict):
-                    database_name = database.get('title', [{}])[0].get('plain_text', 'Base de datos') if database.get('title') else 'Base de datos'
-                else:
-                    database_name = "Base de datos"
-                notion_status = "✅ Conectado"
+            # Ejecutar comando a través del orquestador
+            result = await self._orchestrator.execute_status_command(limit=10)
+            
+            # Obtener información del sistema
+            notion_status = await self._check_notion_connection()
+            queue_status = self._get_queue_status()
+            image_count = self._count_images()
+            
+            # Formatear respuesta combinando estadísticas de apuestas y sistema
+            if result["success"]:
+                stats_text = self._orchestrator.format_status_response(result)
+                
+                system_text = (
+                    f"\n\n🔧 **Estado del Sistema**\n\n"
+                    f"🤖 **Bot**: ✅ Activo\n"
+                    f"📝 **Notion**: {notion_status}\n"
+                    f"📁 **Imágenes guardadas**: {image_count}\n"
+                    f"⏳ **Cola de procesamiento**: {queue_status}"
+                )
+                
+                full_response = stats_text + system_text
             else:
-                database_name = "Error"
-                notion_status = "❌ Cliente no inicializado"
+                full_response = (
+                    f"📊 **Estado del Sistema**\n\n"
+                    f"🤖 **Bot**: ✅ Activo\n"
+                    f"📝 **Notion**: {notion_status}\n"
+                    f"� **Imágenes guardadas**: {image_count}\n"
+                    f"⏳ **Cola de procesamiento**: {queue_status}\n\n"
+                    f"⚠️ No se pudieron obtener estadísticas de apuestas"
+                )
+            
+            await update.message.reply_text(full_response, parse_mode='Markdown')
+            logger.info("✅ Comando /status completado")
+            
         except Exception as e:
-            database_name = "Error"
-            notion_status = f"❌ Error: {str(e)[:50]}..."
-        
-        # Queue status
+            logger.error(f"❌ Error en comando /status: {e}", exc_info=True)
+            await update.message.reply_text(
+                f"❌ Error obteniendo estado: {str(e)[:100]}",
+                parse_mode='Markdown'
+            )
+    
+    async def _check_notion_connection(self) -> str:
+        """Verifica la conexión con Notion."""
+        try:
+            database = self._notion_client.databases.retrieve(self._database_id)
+            return "✅ Conectado"
+        except Exception as e:
+            return f"❌ Error: {str(e)[:30]}..."
+    
+    def _get_queue_status(self) -> str:
+        """Obtiene el estado de la cola."""
         queue_size = self._processing_queue.qsize()
-        queue_status = f"{queue_size} imagen(es) en espera" if queue_size > 0 else "✅ Vacía"
-        
-        # Count images
-        image_count = len(list(self._images_path.glob('*')))
-        
-        status_message = (
-            f"📊 **Estado del Sistema**\n\n"
-            f"🤖 **Bot**: ✅ Activo\n"
-            f"📝 **Notion**: {notion_status}\n"
-            f"🗃️ **Base de datos**: {database_name}\n"
-            f"📁 **Carpeta**: {self._images_path.name}/\n"
-            f"📸 **Imágenes guardadas**: {image_count}\n"
-            f"⏳ **Cola de procesamiento**: {queue_status}\n\n"
-            f"🔧 **ID Base de datos**: `{self._database_id}`"
-        )
-        await update.message.reply_text(status_message, parse_mode='Markdown')
+        if queue_size == 0:
+            return "✅ Vacía"
+        else:
+            return f"⏳ {queue_size} imagen(es) en espera"
+    
+    def _count_images(self) -> int:
+        """Cuenta las imágenes guardadas."""
+        try:
+            return len(list(self._images_path.glob('*')))
+        except Exception:
+            return 0

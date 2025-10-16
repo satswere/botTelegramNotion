@@ -1,7 +1,7 @@
 """
 Application Layer
 
-Contiene los casos de uso (use cases) y DTOs.
+Contiene los casos de uso (use cases), DTOs y orquestadores.
 Orquesta la lógica de aplicación usando el dominio e infraestructura.
 """
 
@@ -17,6 +17,12 @@ from .use_cases import (
     CreateBetUseCase,
     UpdateBetStatusUseCase
 )
+from .orchestration import (
+    MessageProcessor,
+    MessageProcessingError,
+    CommandOrchestrator,
+    CommandType
+)
 
 __all__ = [
     # DTOs
@@ -28,5 +34,10 @@ __all__ = [
     # Use Cases
     'ProcessBetImageUseCase',
     'CreateBetUseCase',
-    'UpdateBetStatusUseCase'
+    'UpdateBetStatusUseCase',
+    # Orchestration
+    'MessageProcessor',
+    'MessageProcessingError',
+    'CommandOrchestrator',
+    'CommandType',
 ]
