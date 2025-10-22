@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 
 # Infrastructure Layer
 from infrastructure.notion import NotionBetRepository
+from infrastructure.notion.notion_file_uploader import NotionFileUploader
 from infrastructure.telegram import TelegramMessageExtractor
 from infrastructure.storage import LocalFileStorage
 from infrastructure.openai import OpenAIImageAnalyzer
@@ -90,6 +91,10 @@ class BotApplication:
         # Configuration
         self.config = self._load_configuration()
 
+        # Queue management (initialize before handlers need it)
+        self.processing_queue = asyncio.Queue()
+        self.queue_task: Optional[asyncio.Task] = None
+
         # Infrastructure
         self.infrastructure = self._setup_infrastructure()
 
@@ -98,10 +103,6 @@ class BotApplication:
 
         # Presentation Layer
         self.handlers = self._setup_handlers()
-
-        # Queue management
-        self.processing_queue = asyncio.Queue()
-        self.queue_task: Optional[asyncio.Task] = None
 
         self.logger.info("✅ Application initialized successfully")
 
@@ -172,6 +173,9 @@ class BotApplication:
         # Image analyzer (AI port)
         image_analyzer = OpenAIImageAnalyzer()
 
+        # Notion file uploader
+        notion_file_uploader = NotionFileUploader(notion_token=self.config["notion_token"])
+
         self.logger.info(f"📁 Images directory: {images_path.absolute()}")
         self.logger.info("✅ Infrastructure layer ready")
 
@@ -181,6 +185,7 @@ class BotApplication:
             "message_extractor": message_extractor,
             "file_storage": file_storage,
             "image_analyzer": image_analyzer,
+            "notion_file_uploader": notion_file_uploader,
         }
 
     def _setup_application_services(self) -> dict:
@@ -210,6 +215,7 @@ class BotApplication:
             notion_client=self.infrastructure["notion_client"],
             database_id=self.config["database_id"],
             images_path=self.config["images_path"],
+            notion_file_uploader=self.infrastructure["notion_file_uploader"],
         )
 
         command_orchestrator = CommandOrchestrator(

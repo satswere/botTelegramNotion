@@ -27,12 +27,12 @@ class NotionBetRepository:
         self.client = notion_client
         self.database_id = database_id
 
-    async def save(self, bet_data: Dict[str, Any]) -> str:
+    async def save(self, bet_data) -> str:
         """
         Guarda una apuesta en Notion.
 
         Args:
-            bet_data: Datos de la apuesta a guardar
+            bet_data: Datos de la apuesta a guardar (puede ser Dict o Bet entity)
 
         Returns:
             ID de la página creada en Notion
@@ -41,10 +41,16 @@ class NotionBetRepository:
             NotionRepositoryError: Si falla la creación
         """
         try:
+            # Convertir objeto Bet a diccionario si es necesario
+            if hasattr(bet_data, '__dict__') and not isinstance(bet_data, dict):
+                bet_dict = self._bet_to_dict(bet_data)
+            else:
+                bet_dict = bet_data
+            
             logger.debug(
-                f"💾 Guardando apuesta en Notion: {bet_data.get('title', 'Sin título')}"
+                f"💾 Guardando apuesta en Notion: {bet_dict.get('title', 'Sin título')}"
             )
-            properties = self._map_to_notion_properties(bet_data)
+            properties = self._map_to_notion_properties(bet_dict)
 
             response = self.client.pages.create(
                 parent={"database_id": self.database_id}, properties=properties
@@ -172,23 +178,37 @@ class NotionBetRepository:
         # Valores por defecto
         title = bet_data.get("event", bet_data.get("title", "Apuesta"))
         event = analyzed_data.get("Evento", title)
-        market = analyzed_data.get("Mercado", bet_data.get("market", ""))
-        selection = analyzed_data.get("Seleccion", bet_data.get("selection", ""))
+        
+        # Buscar Mercado y Selección (en mayúsculas y minúsculas para compatibilidad)
+        market = (
+            analyzed_data.get("Mercado") 
+            or analyzed_data.get("mercado") 
+            or bet_data.get("market", "")
+        )
+        selection = (
+            analyzed_data.get("Seleccion") 
+            or analyzed_data.get("seleccion") 
+            or bet_data.get("selection", "")
+        )
 
         # Cuota y monto
         try:
-            odds = float(
-                str(analyzed_data.get("Cuota", bet_data.get("odds", "0"))).replace(
-                    ",", "."
-                )
+            cuota_value = (
+                analyzed_data.get("Cuota") 
+                or analyzed_data.get("cuota") 
+                or bet_data.get("odds", "0")
             )
+            odds = float(str(cuota_value).replace(",", "."))
         except (ValueError, TypeError):
             odds = 0.0
 
         try:
-            amount_str = str(
-                analyzed_data.get("Monto_Apostado", bet_data.get("amount", "0"))
+            monto_value = (
+                analyzed_data.get("Monto_Apostado") 
+                or analyzed_data.get("monto") 
+                or bet_data.get("amount", "0")
             )
+            amount_str = str(monto_value)
             amount = float(amount_str.replace("€", "").replace(",", ".").strip())
         except (ValueError, TypeError, AttributeError):
             amount = 0.0
@@ -211,10 +231,12 @@ class NotionBetRepository:
             },
         }
 
-        # Agregar archivo si existe
+        # Agregar archivo en el campo "Captura / Comprobante"
         file_upload_id = bet_data.get("file_upload_id")
         filename = bet_data.get("filename", "image.jpg")
+        
         if file_upload_id:
+            # Usar file_upload_id (proceso de 3 pasos completado)
             properties["Captura / Comprobante"] = {
                 "files": [
                     {
@@ -224,6 +246,12 @@ class NotionBetRepository:
                     }
                 ]
             }
+            logger.debug(f"✅ Archivo adjunto con file_upload_id: {file_upload_id}")
+        elif filename:
+            # Si no hay file_upload_id, agregar referencia en el mercado
+            market_with_file = f"{market}\n📎 Archivo: {filename}" if market else f"📎 Archivo: {filename}"
+            properties["Mercado"] = {"rich_text": [{"text": {"content": market_with_file[:2000]}}]}
+            logger.debug(f"ℹ️ Archivo referenciado en Mercado: {filename}")
 
         return properties
 
@@ -266,3 +294,56 @@ class NotionBetRepository:
         if prop and prop.get("rich_text") and len(prop["rich_text"]) > 0:
             return prop["rich_text"][0]["text"]["content"]
         return ""
+
+    def _bet_to_dict(self, bet) -> Dict[str, Any]:
+        """
+        Convierte un objeto Bet a diccionario compatible con _map_to_notion_properties.
+        
+        Args:
+            bet: Objeto Bet del dominio
+            
+        Returns:
+            Diccionario con datos de la apuesta
+        """
+        # Obtener diccionario base del objeto Bet
+        bet_dict = bet.to_dict()
+        
+        # Adaptar al formato esperado por _map_to_notion_properties
+        result = {
+            "title": bet_dict.get("event", "Apuesta"),
+            "event": bet_dict.get("event", "No especificado"),
+            "bet_type": bet_dict.get("bet_type", "Simple"),
+            "status": bet_dict.get("status", {}).get("value", "Pendiente") if isinstance(bet_dict.get("status"), dict) else str(bet_dict.get("status", "Pendiente")),
+            "bookmaker": "bet365",  # Default
+        }
+        
+        # Agregar cuota si existe
+        if bet_dict.get("odds"):
+            odds_data = bet_dict["odds"]
+            if isinstance(odds_data, dict):
+                result["odds"] = odds_data.get("value", 0)
+            else:
+                result["odds"] = float(odds_data) if odds_data else 0
+        
+        # Agregar monto si existe
+        if bet_dict.get("stake"):
+            stake_data = bet_dict["stake"]
+            if isinstance(stake_data, dict):
+                result["amount"] = stake_data.get("amount", 0)
+            else:
+                result["amount"] = float(stake_data) if stake_data else 0
+        
+        # Agregar información de imágenes si existen
+        if bet_dict.get("images") and len(bet_dict["images"]) > 0:
+            first_image = bet_dict["images"][0]
+            result["filename"] = first_image.get("filename", "image.jpg")
+            
+            # Buscar notion_file_id en la imagen
+            if first_image.get("notion_file_id"):
+                result["file_upload_id"] = first_image["notion_file_id"]
+        
+        # Agregar datos del análisis si existen
+        if hasattr(bet, 'raw_analysis') and bet.raw_analysis:
+            result["analyzed_data"] = bet.raw_analysis
+        
+        return result

@@ -22,6 +22,7 @@ from notion_client import Client
 from application.use_cases import ProcessBetImageUseCase
 from application.dtos import ImageDTO, MessageDTO
 from domain.repositories import IMessageExtractor
+from infrastructure.notion.notion_file_uploader import NotionFileUploader, NotionFileUploaderError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class MessageProcessor:
         notion_client: Client,
         database_id: str,
         images_path: Path,
+        notion_file_uploader: NotionFileUploader,
     ):
         """
         Inicializa el procesador de mensajes.
@@ -60,12 +62,14 @@ class MessageProcessor:
             notion_client: Cliente de Notion para uploads
             database_id: ID de la base de datos de Notion
             images_path: Ruta para almacenar imágenes temporales
+            notion_file_uploader: Servicio para subir archivos a Notion
         """
         self._process_bet_use_case = process_bet_use_case
         self._message_extractor = message_extractor
         self._notion_client = notion_client
         self._database_id = database_id
         self._images_path = images_path
+        self._notion_file_uploader = notion_file_uploader
 
         # Asegurar que existe el directorio
         self._images_path.mkdir(parents=True, exist_ok=True)
@@ -110,14 +114,14 @@ class MessageProcessor:
             # 2. Descargar imagen
             filename = await self._download_image(message, context)
 
-            # 3. Subir a Notion
-            notion_file_id = await self._upload_to_notion(filename)
+            # 3. Subir imagen a Notion
+            notion_file_id = await self._upload_image_to_notion(filename)
 
             # 4. Crear DTOs
             image_dto = self._create_image_dto(message, filename)
             message_dto = self._create_message_dto(message, message_data)
 
-            # 5. Ejecutar use case
+            # 5. Ejecutar use case con el file_upload_id
             bet_dto = await self._process_bet_use_case.execute(
                 image_dto=image_dto,
                 message_dto=message_dto,
@@ -200,47 +204,40 @@ class MessageProcessor:
             logger.error(f"❌ Error descargando imagen: {e}")
             raise MessageProcessingError(f"Error descargando imagen: {str(e)}") from e
 
-    async def _upload_to_notion(self, filename: str) -> str:
+    async def _upload_image_to_notion(self, filename: str) -> Optional[str]:
         """
-        Sube un archivo a Notion.
+        Sube la imagen a Notion usando el servicio de upload.
 
         Args:
             filename: Nombre del archivo a subir
 
         Returns:
-            ID del archivo subido en Notion
+            file_upload_id si es exitoso, None si falla
 
         Raises:
             MessageProcessingError: Si falla la subida
         """
-        logger.debug(f"☁️ Subiendo {filename} a Notion")
+        file_path = self._images_path / filename
+        
+        logger.debug(f"📤 Subiendo imagen a Notion: {filename}")
 
         try:
-            file_path = self._images_path / filename
+            file_upload_id = await self._notion_file_uploader.upload_file(file_path)
+            
+            if file_upload_id:
+                logger.info(f"✅ Imagen subida a Notion: {file_upload_id}")
+            else:
+                logger.warning(f"⚠️ No se obtuvo file_upload_id para {filename}")
+            
+            return file_upload_id
 
-            # Leer archivo
-            with open(file_path, "rb") as f:
-                _ = f.read()  # File data read but not used yet (future upload feature)
-
-            # Subir a Notion usando la API de archivos
-            # Nota: Notion tiene limitaciones en el upload de archivos
-            # Por ahora, creamos un registro temporal y obtenemos el ID
-            temp_page = self._notion_client.pages.create(
-                parent={"database_id": self._database_id},
-                properties={
-                    "Evento": {"title": [{"text": {"content": f"temp_{filename}"}}]},
-                    "Estado": {"select": {"name": "Pendiente"}},
-                },
-            )
-
-            upload_id = temp_page["id"]
-            logger.info(f"✅ Archivo referenciado en Notion: {upload_id}")
-
-            return upload_id
-
+        except NotionFileUploaderError as e:
+            logger.error(f"❌ Error subiendo imagen a Notion: {e}")
+            # No lanzar excepción, solo advertir y continuar sin archivo
+            return None
         except Exception as e:
-            logger.error(f"❌ Error subiendo a Notion: {e}")
-            raise MessageProcessingError(f"Error subiendo archivo: {str(e)}") from e
+            logger.error(f"❌ Error inesperado subiendo imagen: {e}", exc_info=True)
+            return None
 
     def _create_image_dto(self, message: Message, filename: str) -> ImageDTO:
         """

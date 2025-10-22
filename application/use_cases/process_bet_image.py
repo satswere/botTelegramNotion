@@ -106,26 +106,46 @@ class ProcessBetImageUseCase:
 
     def _build_analysis_prompt(self) -> str:
         """Build the prompt for image analysis."""
-        return """
-        Analiza esta captura de apuesta deportiva y extrae la siguiente información en formato JSON:
-        {
-            "evento": "descripción del evento deportivo",
-            "tipo_apuesta": "tipo de apuesta realizada",
-            "cuota": "valor de la cuota (ej: 1.90, 2.50)",
-            "monto": "monto apostado con símbolo de moneda (ej: €50, €100)",
-            "ganancia_potencial": "ganancia potencial con símbolo de moneda",
-            "fecha": "fecha del evento si está visible",
-            "estado": "estado de la apuesta (Ganada, Perdida, Pendiente)"
-        }
+        return """Eres un sistema de extracción de campos para tickets de apuesta generados por Bet365. Tu tarea es identificar y extraer información clave a partir de la imagen de un ticket. La información debe estructurarse en campos específicos según el formato definido.
 
-Reglas importantes:
+# Campos que debes identificar y extraer:
+
+1. **ID del Ticket:** El número identificador único del ticket (ej: "123456")
+2. **Deporte:** El deporte relacionado con el evento (ej: "Fútbol", "Tenis", "Baloncesto")
+3. **Evento:** Nombre específico del evento o partido (ej: "Barcelona vs Real Madrid")
+4. **Mercado:** El tipo de apuesta realizada (ej: "Ganador del partido", "Over/Under 2.5", "Ambos equipos marcan")
+5. **Seleccion:** La elección del apostador (ej: "Barcelona", "Más de 2.5 goles", "Sí")
+6. **Cuota:** La cuota asociada a la apuesta (ej: "1.75", "2.10")
+7. **Monto_Apostado:** Cantidad en la moneda definida (ej: "€20", "€50")
+8. **Ganancia_Potencial:** Cantidad que se puede ganar (ej: "€35", "€105")
+9. **Estado_Apuesta:** Estado actual del ticket (ej: "Ganada", "Perdida", "Pendiente")
+
+# Formato de salida esperado:
+Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
+
+```json
+{
+  "ID_Ticket": "123456",
+  "Deporte": "Fútbol",
+  "Evento": "Barcelona vs Real Madrid",
+  "Mercado": "Ganador del partido",
+  "Seleccion": "Barcelona",
+  "Cuota": "1.80",
+  "Monto_Apostado": "€50",
+  "Ganancia_Potencial": "€90",
+  "Estado_Apuesta": "Pendiente"
+}
+```
+
+# Reglas importantes:
 1. SIEMPRE devuelve un objeto JSON con TODOS los campos.
 2. Si no puedes identificar un campo, usa EXACTAMENTE "No especificado" como valor.
-3. Mantén los nombres de los campos EXACTAMENTE como se muestran.
+3. Mantén los nombres de los campos EXACTAMENTE como se muestran (con mayúsculas y guiones bajos).
 4. Las cuotas deben ser strings con formato decimal (ej: "1.90", "2.10").
 5. Los montos deben incluir el símbolo de la moneda (ej: "€50", "€100").
-6. El estado debe ser "Ganada", "Perdida" o "Pendiente".
-        """
+6. El estado de la apuesta debe ser "Ganada", "Perdida" o "Pendiente".
+7. El Mercado y la Selección son CAMPOS DIFERENTES: Mercado es el tipo de apuesta, Selección es la opción elegida.
+"""
 
     def _parse_analysis_result(self, analysis_result: str) -> Dict[str, Any]:
         """
@@ -138,18 +158,47 @@ Reglas importantes:
             Parsed dictionary
         """
         try:
+            # Limpiar resultado si viene con marcadores de código
+            cleaned_result = analysis_result.strip()
+            if cleaned_result.startswith("```json"):
+                cleaned_result = cleaned_result.replace("```json", "").replace("```", "").strip()
+            elif cleaned_result.startswith("```"):
+                cleaned_result = cleaned_result.replace("```", "").strip()
+            
             # Try to parse as JSON
-            return json.loads(analysis_result)
+            parsed_data = json.loads(cleaned_result)
+            
+            # Normalizar nombres de campos a los esperados por el repositorio
+            normalized = {}
+            field_mapping = {
+                "ID_Ticket": "ID_Ticket",
+                "Deporte": "Deporte",
+                "Evento": "Evento",
+                "Mercado": "Mercado",
+                "Seleccion": "Seleccion",
+                "Cuota": "Cuota",
+                "Monto_Apostado": "Monto_Apostado",
+                "Ganancia_Potencial": "Ganancia_Potencial",
+                "Estado_Apuesta": "Estado_Apuesta",
+            }
+            
+            for key, normalized_key in field_mapping.items():
+                if key in parsed_data:
+                    normalized[normalized_key] = parsed_data[key]
+            
+            return normalized if normalized else parsed_data
+            
         except json.JSONDecodeError:
             # If not valid JSON, return raw result wrapped
             return {
                 "raw_analysis": analysis_result,
-                "evento": "No especificado",
-                "tipo_apuesta": "No especificado",
-                "cuota": "No especificado",
-                "monto": "No especificado",
-                "ganancia_potencial": "No especificado",
-                "estado": "Pendiente",
+                "Evento": "No especificado",
+                "Mercado": "No especificado",
+                "Seleccion": "No especificado",
+                "Cuota": "No especificado",
+                "Monto_Apostado": "No especificado",
+                "Ganancia_Potencial": "No especificado",
+                "Estado_Apuesta": "Pendiente",
             }
 
     async def _cleanup_temp_file(self, filename: str) -> None:

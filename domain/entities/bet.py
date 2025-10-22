@@ -135,36 +135,50 @@ class Bet:
         """
         self.raw_analysis = analysis_data
 
-        # Update fields if present in analysis
-        if "evento" in analysis_data and analysis_data["evento"]:
-            self.event = analysis_data["evento"]
+        # Función auxiliar para obtener valor con diferentes variantes
+        def get_field(data, *keys):
+            for key in keys:
+                if key in data and data[key] and str(data[key]).strip() and str(data[key]) != "No especificado":
+                    return data[key]
+            return None
 
-        if "tipo_apuesta" in analysis_data and analysis_data["tipo_apuesta"]:
-            self.bet_type = analysis_data["tipo_apuesta"]
+        # Update fields if present in analysis (soporta múltiples formatos)
+        evento = get_field(analysis_data, "Evento", "evento")
+        if evento:
+            self.event = str(evento)
 
-        if "cuota" in analysis_data:
-            odds = Odds.from_string(str(analysis_data["cuota"]))
+        tipo_apuesta = get_field(analysis_data, "tipo_apuesta", "Tipo_Apuesta")
+        if tipo_apuesta:
+            self.bet_type = str(tipo_apuesta)
+
+        cuota = get_field(analysis_data, "Cuota", "cuota")
+        if cuota:
+            odds = Odds.from_string(str(cuota))
             if odds:
                 self.odds = odds
 
-        if "monto" in analysis_data:
-            stake = Money.from_string(str(analysis_data["monto"]))
+        monto = get_field(analysis_data, "Monto_Apostado", "monto", "Monto")
+        if monto:
+            stake = Money.from_string(str(monto))
             if stake:
                 self.stake = stake
 
-        if "ganancia_potencial" in analysis_data:
-            profit = Money.from_string(str(analysis_data["ganancia_potencial"]))
+        ganancia = get_field(analysis_data, "Ganancia_Potencial", "ganancia_potencial", "Ganancia")
+        if ganancia:
+            profit = Money.from_string(str(ganancia))
             if profit:
                 self.potential_profit = profit
 
-        if "estado" in analysis_data:
-            status = BetStatus.from_string(str(analysis_data["estado"]))
+        estado = get_field(analysis_data, "Estado_Apuesta", "estado", "Estado")
+        if estado:
+            status = BetStatus.from_string(str(estado))
             if status:
                 self.status = status
 
-        if "fecha" in analysis_data and analysis_data["fecha"]:
+        fecha = get_field(analysis_data, "fecha", "Fecha")
+        if fecha:
             try:
-                self.event_date = datetime.fromisoformat(str(analysis_data["fecha"]))
+                self.event_date = datetime.fromisoformat(str(fecha))
             except (ValueError, TypeError):
                 pass
 
