@@ -58,8 +58,6 @@ class CommandOrchestrator:
             update_bet_status_use_case or UpdateBetStatusUseCase(bet_repository)
         )
 
-        logger.info("🎯 CommandOrchestrator inicializado")
-
     async def execute_status_command(
         self, user_id: Optional[int] = None, limit: int = 10
     ) -> Dict[str, Any]:

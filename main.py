@@ -86,7 +86,7 @@ class BotApplication:
     def __init__(self):
         """Initialize application with all dependencies."""
         self.logger = logging.getLogger(__name__)
-        self.logger.info("🚀 Starting Telegram-Notion Betting Bot...")
+        self.logger.info("🚀 Starting bot...")
 
         # Configuration
         self.config = self._load_configuration()
@@ -104,7 +104,7 @@ class BotApplication:
         # Presentation Layer
         self.handlers = self._setup_handlers()
 
-        self.logger.info("✅ Application initialized successfully")
+        self.logger.info("✅ Bot initialized")
 
     def _load_configuration(self) -> dict:
         """
@@ -136,12 +136,11 @@ class BotApplication:
                 "❌ NOTION_DATABASE_ID not configured. " "Please set it in .env file"
             )
 
-        self.logger.info("✅ Configuration loaded")
-
         return {
             "telegram_token": telegram_token,
             "notion_token": notion_token,
             "database_id": database_id,
+            "tipster_database_id": os.getenv("TIPSTER_DATABASE_ID"),  # Opcional
             "images_path": Path("storage/images"),
         }
 
@@ -152,8 +151,6 @@ class BotApplication:
         Returns:
             Dictionary with infrastructure components
         """
-        self.logger.info("🔧 Setting up infrastructure layer...")
-
         # Ensure images directory exists
         images_path = self.config["images_path"]
         images_path.mkdir(parents=True, exist_ok=True)
@@ -162,7 +159,9 @@ class BotApplication:
         notion_client = Client(auth=self.config["notion_token"])
 
         # Repository (persistence port)
-        bet_repository = NotionBetRepository(notion_client, self.config["database_id"])
+        # Si tienes una base de datos de Tipsters, agrega su ID aquí
+        tipster_db_id = self.config.get("tipster_database_id")  # Opcional
+        bet_repository = NotionBetRepository(notion_client, self.config["database_id"], tipster_db_id)
 
         # Message extractor (telegram port)
         message_extractor = TelegramMessageExtractor()
@@ -175,9 +174,6 @@ class BotApplication:
 
         # Notion file uploader
         notion_file_uploader = NotionFileUploader(notion_token=self.config["notion_token"])
-
-        self.logger.info(f"📁 Images directory: {images_path.absolute()}")
-        self.logger.info("✅ Infrastructure layer ready")
 
         return {
             "notion_client": notion_client,
@@ -195,8 +191,6 @@ class BotApplication:
         Returns:
             Dictionary with application services
         """
-        self.logger.info("🔧 Setting up application layer...")
-
         # Use Cases
         process_bet_use_case = ProcessBetImageUseCase(
             image_analyzer=self.infrastructure["image_analyzer"],
@@ -223,8 +217,6 @@ class BotApplication:
             update_bet_status_use_case=update_bet_status_use_case,
         )
 
-        self.logger.info("✅ Application layer ready (Use Cases + Orchestrators)")
-
         return {
             "process_bet_use_case": process_bet_use_case,
             "update_bet_status_use_case": update_bet_status_use_case,
@@ -239,8 +231,6 @@ class BotApplication:
         Returns:
             Dictionary with handlers
         """
-        self.logger.info("🔧 Setting up presentation layer...")
-
         # Command handlers (stateless)
         start_handler = StartHandler()
         help_handler = HelpHandler()
@@ -259,8 +249,6 @@ class BotApplication:
             message_processor=self.services["message_processor"],
             processing_queue=self.processing_queue,
         )
-
-        self.logger.info("✅ Presentation layer ready (Handlers)")
 
         return {
             "start": start_handler,
@@ -290,14 +278,13 @@ class BotApplication:
 
                 # Stop signal
                 if task_data is None:
-                    self.logger.info("🛑 Queue processor stopping...")
                     break
 
                 update, context = task_data
                 queue_size = self.processing_queue.qsize()
 
                 self.logger.info(
-                    f"📦 Processing image from queue " f"({queue_size} remaining)"
+                    f"📦 Processing image ({queue_size} remaining)"
                 )
 
                 # Process using image handler
@@ -318,14 +305,12 @@ class BotApplication:
     async def _on_startup(self, application: Application) -> None:
         """Callback executed when bot starts."""
         self.queue_task = asyncio.create_task(self._process_queue())
-        self.logger.info("✅ Background tasks started")
 
     async def _on_shutdown(self, application: Application) -> None:
         """Callback executed when bot stops."""
         if self.queue_task:
             await self.processing_queue.put(None)
             await self.queue_task
-        self.logger.info("✅ Background tasks stopped")
 
     # ========================================================================
     # APPLICATION RUNNER
@@ -341,8 +326,6 @@ class BotApplication:
         3. Sets up lifecycle callbacks
         4. Starts polling for updates
         """
-        self.logger.info("🤖 Building Telegram application...")
-
         # Build application with lifecycle callbacks
         application = (
             Application.builder()
@@ -365,8 +348,7 @@ class BotApplication:
         )
 
         # Start bot
-        self.logger.info("🚀 Starting bot polling...")
-        self.logger.info("✅ Bot is running. Press Ctrl+C to stop.")
+        self.logger.info("🚀 Bot is running. Press Ctrl+C to stop.")
 
         application.run_polling(allowed_updates=["message"])
 

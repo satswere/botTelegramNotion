@@ -43,8 +43,6 @@ class NotionFileUploader:
             "Authorization": f"Bearer {self._notion_token}",
             "Notion-Version": self._notion_version,
         }
-        
-        logger.info("📤 NotionFileUploader inicializado")
 
     async def upload_file(self, file_path: str | Path) -> Optional[str]:
         """

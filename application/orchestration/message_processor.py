@@ -74,8 +74,6 @@ class MessageProcessor:
         # Asegurar que existe el directorio
         self._images_path.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"📨 MessageProcessor inicializado - images_path: {images_path}")
-
     async def process_image_message(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> Dict[str, Any]:
@@ -151,8 +149,6 @@ class MessageProcessor:
         Returns:
             Diccionario con metadatos extraídos
         """
-        logger.debug(f"📋 Extrayendo metadatos del mensaje {message.message_id}")
-
         try:
             return self._message_extractor.extract_metadata(message)
         except Exception as e:
@@ -183,8 +179,6 @@ class MessageProcessor:
         if not message.photo:
             raise MessageProcessingError("Mensaje no contiene foto")
 
-        logger.debug(f"⬇️ Descargando imagen del mensaje {message.message_id}")
-
         try:
             # Obtener la foto de mayor resolución
             photo = message.photo[-1]
@@ -197,7 +191,7 @@ class MessageProcessor:
             # Descargar
             await file.download_to_drive(str(file_path))
 
-            logger.info(f"✅ Imagen descargada: {filename} ({photo.file_size} bytes)")
+            logger.info(f"✅ Imagen descargada: {filename}")
             return filename
 
         except Exception as e:
@@ -218,8 +212,6 @@ class MessageProcessor:
             MessageProcessingError: Si falla la subida
         """
         file_path = self._images_path / filename
-        
-        logger.debug(f"📤 Subiendo imagen a Notion: {filename}")
 
         try:
             file_upload_id = await self._notion_file_uploader.upload_file(file_path)
@@ -236,7 +228,7 @@ class MessageProcessor:
             # No lanzar excepción, solo advertir y continuar sin archivo
             return None
         except Exception as e:
-            logger.error(f"❌ Error inesperado subiendo imagen: {e}", exc_info=True)
+            logger.error(f"❌ Error inesperado subiendo imagen: {e}")
             return None
 
     def _create_image_dto(self, message: Message, filename: str) -> ImageDTO:

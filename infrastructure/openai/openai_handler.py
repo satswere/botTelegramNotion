@@ -11,9 +11,19 @@ import os
 from typing import Optional
 from base64 import b64encode
 from dotenv import load_dotenv
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
+import logging
 
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIHandler:
@@ -31,6 +41,13 @@ class OpenAIHandler:
         if not self.api_version:
             raise ValueError("API_VERSION no está configurada en el archivo .env")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((aiohttp.ClientError, aiohttp.ClientResponseError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def send_message_to_gpt(
         self, message: str, system_prompt: str = "Eres un asistente útil"
     ) -> str:
@@ -64,6 +81,13 @@ class OpenAIHandler:
             print(f"Error al enviar mensaje a OpenAI: {str(e)}")
             raise
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((aiohttp.ClientError, aiohttp.ClientResponseError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def analyze_image(
         self,
         image_path: str,

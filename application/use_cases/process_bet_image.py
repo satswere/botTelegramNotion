@@ -68,7 +68,6 @@ class ProcessBetImageUseCase:
 
             # Step 2: Parse analysis result
             analysis_data = self._parse_analysis_result(analysis_result)
-
             # Step 3: Create bet with analysis data
             create_dto = CreateBetDTO(
                 telegram_user_id=message_dto.user_id,
@@ -110,15 +109,16 @@ class ProcessBetImageUseCase:
 
 # Campos que debes identificar y extraer:
 
-1. **ID del Ticket:** El número identificador único del ticket (ej: "123456")
-2. **Deporte:** El deporte relacionado con el evento (ej: "Fútbol", "Tenis", "Baloncesto")
+1. **ID_Ticket:** El número identificador único del ticket (ej: "123456")
+2. **Deporte:** El deporte relacionado con el evento (ej: "Baloncesto", "Fútbol", "Tenis", "Béisbol"). Si no se identifica, pon "No identificado"
 3. **Evento:** Nombre específico del evento o partido (ej: "Barcelona vs Real Madrid")
 4. **Mercado:** El tipo de apuesta realizada (ej: "Ganador del partido", "Over/Under 2.5", "Ambos equipos marcan")
 5. **Seleccion:** La elección del apostador (ej: "Barcelona", "Más de 2.5 goles", "Sí")
 6. **Cuota:** La cuota asociada a la apuesta (ej: "1.75", "2.10")
-7. **Monto_Apostado:** Cantidad en la moneda definida (ej: "€20", "€50")
+7. **Monto_Apostado:** Cantidad en la moneda definida (ej: "€20", "€50"). IMPORTANTE: Extrae este valor de la imagen, no uses un valor por defecto
 8. **Ganancia_Potencial:** Cantidad que se puede ganar (ej: "€35", "€105")
-9. **Estado_Apuesta:** Estado actual del ticket (ej: "Ganada", "Perdida", "Pendiente")
+9. **Estado_Apuesta:** Estado actual del ticket. USA SOLO: "Ganada", "Perdida" o "Pendiente" (no uses otros estados)
+10. **Numero_Apuestas:** El número total de apuestas en el ticket. Si es una sola apuesta, pon 1. Si hay múltiples apuestas combinadas, pon el número total (ej: 2, 3, 4, etc.)
 
 # Formato de salida esperado:
 Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
@@ -126,14 +126,15 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
 ```json
 {
   "ID_Ticket": "123456",
-  "Deporte": "Fútbol",
-  "Evento": "Barcelona vs Real Madrid",
+  "Deporte": "Baloncesto",
+  "Evento": "Lakers vs Celtics",
   "Mercado": "Ganador del partido",
-  "Seleccion": "Barcelona",
+  "Seleccion": "Lakers",
   "Cuota": "1.80",
   "Monto_Apostado": "€50",
   "Ganancia_Potencial": "€90",
-  "Estado_Apuesta": "Pendiente"
+  "Estado_Apuesta": "Pendiente",
+  "Numero_Apuestas": 1
 }
 ```
 
@@ -142,9 +143,11 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
 2. Si no puedes identificar un campo, usa EXACTAMENTE "No especificado" como valor.
 3. Mantén los nombres de los campos EXACTAMENTE como se muestran (con mayúsculas y guiones bajos).
 4. Las cuotas deben ser strings con formato decimal (ej: "1.90", "2.10").
-5. Los montos deben incluir el símbolo de la moneda (ej: "€50", "€100").
-6. El estado de la apuesta debe ser "Ganada", "Perdida" o "Pendiente".
+5. Los montos deben incluir el símbolo de la moneda (ej: "€50", "€100") y deben ser extraídos de la imagen.
+6. El estado de la apuesta SOLO puede ser: "Ganada", "Perdida" o "Pendiente".
 7. El Mercado y la Selección son CAMPOS DIFERENTES: Mercado es el tipo de apuesta, Selección es la opción elegida.
+8. Deporte: Identificar el deporte específico (ej: "Baloncesto", "Fútbol", "Tenis"). Si no se puede identificar, usar "No identificado".
+9. Numero_Apuestas debe ser un número entero (1 para simple, 2+ para combinada).
 """
 
     def _parse_analysis_result(self, analysis_result: str) -> Dict[str, Any]:
@@ -180,6 +183,7 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
                 "Monto_Apostado": "Monto_Apostado",
                 "Ganancia_Potencial": "Ganancia_Potencial",
                 "Estado_Apuesta": "Estado_Apuesta",
+                "Numero_Apuestas": "Numero_Apuestas",
             }
             
             for key, normalized_key in field_mapping.items():

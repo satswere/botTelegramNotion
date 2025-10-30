@@ -7,9 +7,14 @@ Error Handling Strategy:
 - Handles PermissionError for access denied
 - Handles OSError for disk/IO issues
 - Comprehensive logging at debug, info, warning, and error levels
+
+Security:
+- Filename sanitization to prevent path traversal attacks
+- Validates filenames before saving or loading
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -28,7 +33,49 @@ class LocalFileStorage:
     def __init__(self, base_path: str = "storage/images"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        logger.info(f"📁 LocalFileStorage inicializado: {self.base_path.absolute()}")
+
+    def _sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitiza el nombre del archivo para prevenir ataques de path traversal.
+        
+        Args:
+            filename: Nombre del archivo a sanitizar
+            
+        Returns:
+            Nombre de archivo sanitizado y seguro
+            
+        Raises:
+            FileStorageError: Si el nombre del archivo es inválido
+        """
+        if not filename or not filename.strip():
+            raise FileStorageError("El nombre del archivo no puede estar vacío")
+        
+        # Remover cualquier directorio del path (solo nombre base)
+        filename = Path(filename).name
+        
+        # Rechazar nombres peligrosos
+        if filename in (".", "..", "") or filename.startswith("."):
+            raise FileStorageError(f"Nombre de archivo no permitido: {filename}")
+        
+        # Remover caracteres peligrosos, mantener solo alfanuméricos, guiones, puntos y guiones bajos
+        sanitized = re.sub(r'[^\w\-\.]', '_', filename)
+        
+        # Limitar longitud del nombre de archivo
+        if len(sanitized) > 255:
+            name_parts = sanitized.rsplit('.', 1)
+            if len(name_parts) == 2:
+                name, ext = name_parts
+                sanitized = f"{name[:250]}.{ext}"
+            else:
+                sanitized = sanitized[:255]
+        
+        # Verificar que no intente escapar del directorio base
+        full_path = (self.base_path / sanitized).resolve()
+        if not str(full_path).startswith(str(self.base_path.resolve())):
+            raise FileStorageError(f"Intento de path traversal detectado: {filename}")
+        
+        logger.debug(f"🔒 Filename sanitizado: '{filename}' -> '{sanitized}'")
+        return sanitized
 
     async def save(
         self, file_data: bytes, filename: str, metadata: Optional[dict] = None
@@ -47,6 +94,9 @@ class LocalFileStorage:
         Raises:
             FileStorageError: Si falla el guardado
         """
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         logger.debug(f"💾 Guardando archivo: {filename} ({len(file_data)} bytes)")
 
         try:
@@ -87,6 +137,9 @@ class LocalFileStorage:
         Raises:
             FileStorageError: Si falla la carga o el archivo no existe
         """
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         logger.debug(f"📂 Cargando archivo: {filename}")
 
         try:
@@ -122,6 +175,9 @@ class LocalFileStorage:
 
     async def delete(self, filename: str) -> bool:
         """Elimina archivo del disco"""
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         try:
             file_path = self.base_path / filename
 
@@ -139,6 +195,9 @@ class LocalFileStorage:
 
     async def exists(self, filename: str) -> bool:
         """Verifica si un archivo existe"""
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         file_path = self.base_path / filename
         return file_path.exists()
 
@@ -174,6 +233,9 @@ class LocalFileStorage:
         Raises:
             FileStorageError: Si el archivo no existe o falla la operación
         """
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         logger.debug(f"📏 Obteniendo tamaño de: {filename}")
 
         try:
@@ -203,4 +265,7 @@ class LocalFileStorage:
 
     def get_path(self, filename: str) -> Path:
         """Obtiene la ruta completa de un archivo"""
+        # Sanitizar nombre del archivo para seguridad
+        filename = self._sanitize_filename(filename)
+        
         return self.base_path / filename

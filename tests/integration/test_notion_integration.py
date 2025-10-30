@@ -43,8 +43,6 @@ async def test_save_bet_to_notion(notion_repository):
     assert isinstance(bet_id, str)
     assert len(bet_id) > 0
 
-    print(f"✅ Apuesta creada con ID: {bet_id}")
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -62,8 +60,6 @@ async def test_find_bet_by_id(notion_repository):
     assert found_bet is not None
     assert found_bet["id"] == bet_id
     assert "Test - Find by ID" in found_bet["event"]
-
-    print(f"✅ Apuesta encontrada: {found_bet['event']}")
 
 
 @pytest.mark.integration
@@ -83,8 +79,6 @@ async def test_update_bet_status(notion_repository):
     # Verificar actualización
     found_bet = await notion_repository.find_by_id(bet_id)
     assert found_bet["status"] == "Ganada"
-
-    print(f"✅ Estado actualizado a: {found_bet['status']}")
 
 
 if __name__ == "__main__":

@@ -48,8 +48,6 @@ class ImageHandler:
         self._processing_queue = processing_queue
         self._delay_between_messages = delay_between_messages
 
-        logger.info("📸 ImageHandler inicializado (refactorizado con MessageProcessor)")
-
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         Handle incoming image message.
