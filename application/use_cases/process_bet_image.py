@@ -105,7 +105,7 @@ class ProcessBetImageUseCase:
 
     def _build_analysis_prompt(self) -> str:
         """Build the prompt for image analysis."""
-        return """Eres un sistema de extracción de campos para tickets de apuesta generados por Bet365. Tu tarea es identificar y extraer información clave a partir de la imagen de un ticket. La información debe estructurarse en campos específicos según el formato definido.
+        return """Eres un sistema de extracción de campos para tickets de apuesta. Tu tarea es identificar y extraer información clave a partir de la imagen de un ticket. La información debe estructurarse en campos específicos según el formato definido.
 
 # Campos que debes identificar y extraer:
 
@@ -119,6 +119,8 @@ class ProcessBetImageUseCase:
 8. **Ganancia_Potencial:** Cantidad que se puede ganar (ej: "€35", "€105")
 9. **Estado_Apuesta:** Estado actual del ticket. USA SOLO: "Ganada", "Perdida" o "Pendiente" (no uses otros estados)
 10. **Numero_Apuestas:** El número total de apuestas en el ticket. Si es una sola apuesta, pon 1. Si hay múltiples apuestas combinadas, pon el número total (ej: 2, 3, 4, etc.)
+11. **Fecha_Evento:** Fecha del evento deportivo si es visible (formato: "YYYY-MM-DD" o "DD/MM/YYYY")
+12. **Casa_Apuestas:** Nombre de la casa de apuestas visible en la imagen (ej: "bet365", "Codere", "Betway", "Sportium")
 
 # Formato de salida esperado:
 Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
@@ -134,7 +136,9 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
   "Monto_Apostado": "€50",
   "Ganancia_Potencial": "€90",
   "Estado_Apuesta": "Pendiente",
-  "Numero_Apuestas": 1
+  "Numero_Apuestas": 1,
+  "Fecha_Evento": "2024-12-20",
+  "Casa_Apuestas": "bet365"
 }
 ```
 
@@ -148,6 +152,8 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
 7. El Mercado y la Selección son CAMPOS DIFERENTES: Mercado es el tipo de apuesta, Selección es la opción elegida.
 8. Deporte: Identificar el deporte específico (ej: "Baloncesto", "Fútbol", "Tenis"). Si no se puede identificar, usar "No identificado".
 9. Numero_Apuestas debe ser un número entero (1 para simple, 2+ para combinada).
+10. Fecha_Evento: Extraer la fecha del evento si está visible en formato ISO o europeo. Si no está visible, usar "No especificado".
+11. Casa_Apuestas: Buscar logos, nombres o marcas de agua en la imagen. Casas comunes: bet365, Codere, Betway, Sportium, William Hill.
 """
 
     def _parse_analysis_result(self, analysis_result: str) -> Dict[str, Any]:
@@ -184,6 +190,8 @@ Debes devolver SIEMPRE un objeto JSON con esta estructura exacta:
                 "Ganancia_Potencial": "Ganancia_Potencial",
                 "Estado_Apuesta": "Estado_Apuesta",
                 "Numero_Apuestas": "Numero_Apuestas",
+                "Fecha_Evento": "Fecha_Evento",
+                "Casa_Apuestas": "Casa_Apuestas",
             }
             
             for key, normalized_key in field_mapping.items():

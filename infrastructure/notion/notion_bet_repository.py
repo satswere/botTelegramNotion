@@ -307,14 +307,16 @@ class NotionBetRepository:
         # Parsear análisis si viene como string JSON
         analyzed_data = bet_data.get("analyzed_data", {})
         if isinstance(analyzed_data, str):
-            import json
-
             try:
                 analyzed_data = json.loads(
                     analyzed_data.replace("```json", "").replace("```", "").strip()
                 )
             except (json.JSONDecodeError, ValueError, TypeError):
                 analyzed_data = {}
+        
+        # LOG CRÍTICO: Ver qué datos llegaron de OpenAI
+        logger.info(f"🔍 ANALYZED_DATA RECIBIDO: {json.dumps(analyzed_data, indent=2, ensure_ascii=False)}")
+        logger.info(f"🔍 BET_DATA KEYS: {list(bet_data.keys())}")
 
         # Valores por defecto
         title = bet_data.get("event", bet_data.get("title", "Apuesta"))
@@ -324,13 +326,16 @@ class NotionBetRepository:
         market = (
             analyzed_data.get("Mercado") 
             or analyzed_data.get("mercado") 
-            or bet_data.get("market", "")
+            or bet_data.get("market", "No especificado")
         )
         selection = (
             analyzed_data.get("Seleccion") 
             or analyzed_data.get("seleccion") 
-            or bet_data.get("selection", "")
+            or bet_data.get("selection", "No especificado")
         )
+        
+        logger.info(f"📊 MARKET extraído: '{market}'")
+        logger.info(f"🎯 SELECTION extraída: '{selection}'")
 
         # Cuota
         try:
@@ -340,28 +345,29 @@ class NotionBetRepository:
                 or bet_data.get("odds", "0")
             )
             odds = float(str(cuota_value).replace(",", "."))
-        except (ValueError, TypeError):
+            logger.info(f"💰 CUOTA extraída: {odds}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"⚠️ Error parseando cuota: {e}")
             odds = 0.0
 
-        # Monto (importe) - extraer de la imagen, usar 500 como default si no hay dato
+        # Monto (importe) - CORREGIDO: Usar analyzed_data correctamente
         try:
-            monto_value = (
-                analyzed_data.get("Monto_Apostado") 
-                or analyzed_data.get("monto") 
-                or bet_data.get("amount", "")
-            )
+            monto_value = analyzed_data.get("Monto_Apostado", "")
             
-            # Convertir a string y limpiar
-            amount_str = str(monto_value)
-            # Remover símbolos de moneda comunes y espacios
-            amount_str_clean = amount_str.replace("€", "").replace("$", "").replace("USD", "").replace("EUR", "").replace(",", "").strip()
-            
-            amount = float(amount_str_clean)
-            
-            if amount <= 0:
-                amount = 500  # Default 500 si no se detecta o es 0
-        except (ValueError, TypeError, AttributeError):
-            amount = 500  # Default 500 si hay error en el parseo
+            if not monto_value or monto_value == "No especificado":
+                logger.warning("⚠️ No se encontró Monto_Apostado en analyzed_data")
+                amount = 0.0
+            else:
+                # Convertir a string y limpiar
+                amount_str = str(monto_value)
+                # Remover símbolos de moneda comunes y espacios
+                amount_str_clean = amount_str.replace("€", "").replace("$", "").replace("USD", "").replace("EUR", "").replace(",", "").strip()
+                
+                amount = float(amount_str_clean)
+                logger.info(f"💵 MONTO extraído: {amount} (original: '{monto_value}')")
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"❌ Error parseando monto: {e}")
+            amount = 0.0
 
         # TIPO DE APUESTA: Simple si 1 apuesta, Combinada si más de 1
         numero_apuestas = analyzed_data.get("Numero_Apuestas", 1)
@@ -422,6 +428,11 @@ class NotionBetRepository:
         # Agregar información de liga en el nombre del evento si es NBA
         event_with_league = f"[{liga}] {event}" if liga == "NBA" else event
 
+        # Detectar casa de apuestas desde datos analizados o usar default
+        casa_apuestas = analyzed_data.get("Casa_Apuestas", "")
+        if not casa_apuestas or casa_apuestas == "No especificado":
+            casa_apuestas = bet_data.get("bookmaker", "bet365")
+        
         # Construir propiedades base (solo las que existen en la base de datos)
         properties = {
             "Evento / Selección": {
@@ -430,7 +441,7 @@ class NotionBetRepository:
             "Fecha": {"date": {"start": datetime.now().isoformat()[:10]}},
             "Resultado": {"select": {"name": estado}},
             "Casa de apuestas": {
-                "select": {"name": bet_data.get("bookmaker", "bet365")}
+                "select": {"name": casa_apuestas}
             },
             "Tipo de apuesta": {"select": {"name": bet_type}},
             "Mercado": {"rich_text": [{"text": {"content": market[:2000]}}]},
