@@ -283,24 +283,52 @@ class MessageProcessor:
         """
         user_name = self._get_user_name(message)
 
-        response = "✅ **Apuesta procesada**\n\n"
-        response += f"👤 Usuario: {user_name}\n"
+        response = "✅ **APUESTA PROCESADA EXITOSAMENTE**\n\n"
+        response += "📋 **INFORMACIÓN EXTRAÍDA:**\n"
+        response += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        if bet_dto.event != "No especificado":
-            response += f"🎯 Evento: {bet_dto.event}\n"
-        if bet_dto.bet_type != "No especificado":
-            response += f"📊 Tipo: {bet_dto.bet_type}\n"
+        # Evento
+        if bet_dto.event and bet_dto.event != "No especificado":
+            response += f"🎯 **Evento:** {bet_dto.event}\n"
+        
+        # Tipo de apuesta
+        if bet_dto.bet_type and bet_dto.bet_type != "No especificado":
+            response += f"📊 **Tipo:** {bet_dto.bet_type}\n"
+        
+        # Cuota
         if bet_dto.odds_value:
-            response += f"💰 Cuota: {bet_dto.odds_value}\n"
+            response += f"💰 **Cuota:** {bet_dto.odds_value}\n"
+        
+        # Importe apostado
+        if bet_dto.stake_amount:
+            currency_symbol = {"EUR": "€", "USD": "$", "GBP": "£"}.get(bet_dto.stake_currency, bet_dto.stake_currency)
+            response += f"💵 **Importe:** {currency_symbol}{bet_dto.stake_amount:.2f}\n"
+        
+        # Ganancia potencial
+        if bet_dto.potential_profit_amount:
+            currency_symbol = {"EUR": "€", "USD": "$", "GBP": "£"}.get(bet_dto.potential_profit_currency, bet_dto.potential_profit_currency)
+            response += f"🎁 **Ganancia potencial:** {currency_symbol}{bet_dto.potential_profit_amount:.2f}\n"
+        
+        # Estado
+        estado_emoji = {"Pendiente": "⏳", "Ganada": "✅", "Perdida": "❌"}.get(bet_dto.status, "📌")
+        response += f"{estado_emoji} **Estado:** {bet_dto.status}\n"
 
-        response += "\n📝 Registro creado en Notion"
+        # Usuario
+        response += f"\n👤 **Usuario:** {user_name}\n"
+        
+        # ID de Notion
+        if bet_dto.id:
+            response += f"🔗 **ID Notion:** `{bet_dto.id[:20]}...`\n"
+
+        response += "\n━━━━━━━━━━━━━━━━━━━━\n"
+        response += "✅ **Guardado en Notion exitosamente**\n"
 
         # Agregar info de reenvío si existe
         forwarding = message_data.get("forwarding", {})
         if forwarding.get("is_forwarded"):
             origin = forwarding.get("origin_info", {})
             if origin.get("origin_sender_name"):
-                response += f"\n↪️ Reenviado de: {origin['origin_sender_name']}"
+                response += f"\n↪️ Reenviado de: **{origin['origin_sender_name']}**"
 
         return response
 
