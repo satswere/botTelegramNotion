@@ -73,7 +73,7 @@ class CommandOrchestrator:
         Returns:
             Diccionario con estadísticas y lista de apuestas
         """
-        logger.info(f"📊 Ejecutando comando STATUS (limit={limit})")
+        logger.info(f"Ejecutando comando STATUS (limit={limit})")
 
         try:
             # Obtener todas las apuestas (o filtradas por usuario)
@@ -85,7 +85,7 @@ class CommandOrchestrator:
             # Obtener apuestas recientes
             recent_bets = bets[:5] if len(bets) > 5 else bets
 
-            logger.info(f"✅ Estadísticas calculadas: {stats['total']} apuestas")
+            logger.info(f"Estadísticas calculadas: {stats['total']} apuestas")
 
             return {
                 "success": True,
@@ -95,7 +95,7 @@ class CommandOrchestrator:
             }
 
         except Exception as e:
-            logger.error(f"❌ Error ejecutando comando STATUS: {e}", exc_info=True)
+            logger.error(f"Error ejecutando comando STATUS: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -147,13 +147,13 @@ class CommandOrchestrator:
             )
 
             if success:
-                logger.info(f"✅ Apuesta {bet_id} actualizada a {new_status}")
+                logger.info(f"Apuesta {bet_id} actualizada a {new_status}")
                 return {"success": True, "bet_id": bet_id, "new_status": new_status}
             else:
                 return {"success": False, "error": "No se pudo actualizar la apuesta"}
 
         except Exception as e:
-            logger.error(f"❌ Error actualizando apuesta: {e}", exc_info=True)
+            logger.error(f"Error actualizando apuesta: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     async def execute_list_bets_command(
@@ -179,7 +179,7 @@ class CommandOrchestrator:
                 limit=limit, status=status_filter
             )
 
-            logger.info(f"✅ Obtenidas {len(bets)} apuestas")
+            logger.info(f"Obtenidas {len(bets)} apuestas")
 
             return {
                 "success": True,
@@ -189,7 +189,7 @@ class CommandOrchestrator:
             }
 
         except Exception as e:
-            logger.error(f"❌ Error listando apuestas: {e}", exc_info=True)
+            logger.error(f"Error listando apuestas: {e}", exc_info=True)
             return {"success": False, "error": str(e), "bets": []}
 
     def _calculate_statistics(self, bets: List[Dict[str, Any]]) -> Dict[str, Any]:
