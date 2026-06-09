@@ -53,11 +53,20 @@ def tmp_images_path(tmp_path):
 
 
 @pytest.fixture
+def mock_notion_file_uploader():
+    """Mock del NotionFileUploader"""
+    uploader = Mock()
+    uploader.upload_file = AsyncMock(return_value="https://notion.so/uploaded-file")
+    return uploader
+
+
+@pytest.fixture
 def message_processor(
     mock_process_bet_use_case,
     mock_message_extractor,
     mock_notion_client,
     tmp_images_path,
+    mock_notion_file_uploader,
 ):
     """Instancia de MessageProcessor con mocks"""
     return MessageProcessor(
@@ -66,6 +75,7 @@ def message_processor(
         notion_client=mock_notion_client,
         database_id="test-database-id",
         images_path=tmp_images_path,
+        notion_file_uploader=mock_notion_file_uploader,
     )
 
 
@@ -155,7 +165,7 @@ class TestMessageProcessorImageProcessing:
         with patch.object(
             message_processor, "_download_image", return_value="bet_12345_999.jpg"
         ) as mock_download, patch.object(
-            message_processor, "_upload_to_notion", return_value="notion-file-123"
+            message_processor, "_upload_image_to_notion", return_value="notion-file-123"
         ) as mock_upload:
 
             # Act
@@ -285,7 +295,7 @@ class TestMessageProcessorResponseFormatting:
 
         # Assert
         assert "✅" in response
-        assert "Apuesta procesada" in response
+        assert "APUESTA PROCESADA" in response
         assert "Real Madrid vs Barcelona" in response
         assert "2.5" in response
 
@@ -324,7 +334,8 @@ class TestMessageProcessorResponseFormatting:
         )
 
         # Assert
-        assert "Reenviado de: Original Sender" in response
+        assert "Reenviado de:" in response
+        assert "Original Sender" in response
 
     def test_get_user_name_with_full_name(
         self, message_processor, mock_telegram_update
