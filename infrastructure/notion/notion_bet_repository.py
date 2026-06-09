@@ -74,18 +74,18 @@ class NotionBetRepository:
 
             if isinstance(response, dict) and "id" in response:
                 page_id = response["id"]
-                logger.info(f"✅ Apuesta guardada exitosamente: {page_id}")
+                logger.info(f"Apuesta guardada exitosamente: {page_id}")
                 return page_id
             else:
                 error_msg = "Respuesta inesperada de Notion API"
-                logger.error(f"❌ {error_msg}: {response}")
+                logger.error(f"{error_msg}: {response}")
                 raise NotionRepositoryError(error_msg)
 
         except APIResponseError as e:
-            logger.error(f"❌ Error de API de Notion: {e.code} - {str(e)}")
+            logger.error(f"Error de API de Notion: {e.code} - {str(e)}")
             raise NotionRepositoryError(f"Error de Notion API: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error inesperado guardando apuesta: {e}", exc_info=True)
+            logger.error(f"Error inesperado guardando apuesta: {e}", exc_info=True)
             raise NotionRepositoryError(f"Error guardando apuesta: {str(e)}") from e
 
     async def find_by_id(self, bet_id: str) -> Optional[Dict[str, Any]]:
@@ -99,17 +99,17 @@ class NotionBetRepository:
             Datos de la apuesta o None si no existe
         """
         try:
-            logger.debug(f"🔍 Buscando apuesta: {bet_id}")
+            logger.debug(f"Buscando apuesta: {bet_id}")
             response = self.client.pages.retrieve(bet_id)
             if response:
-                logger.info(f"✅ Apuesta encontrada: {bet_id}")
+                logger.info(f"Apuesta encontrada: {bet_id}")
                 return self._map_from_notion_page(response)
             return None
         except APIResponseError as e:
             if e.code == "object_not_found":
-                logger.warning(f"⚠️ Apuesta no encontrada: {bet_id}")
+                logger.warning(f"Apuesta no encontrada: {bet_id}")
                 return None
-            logger.error(f"❌ Error de API buscando apuesta {bet_id}: {str(e)}")
+            logger.error(f"Error de API buscando apuesta {bet_id}: {str(e)}")
             raise NotionRepositoryError(f"Error buscando apuesta: {str(e)}") from e
         except Exception as e:
             logger.error(
@@ -139,18 +139,18 @@ class NotionBetRepository:
             NotionRepositoryError: Si falla la actualización
         """
         try:
-            logger.debug(f"🔄 Actualizando estado de {bet_id} a {new_status}")
+            logger.debug(f"Actualizando estado de {bet_id} a {new_status}")
             self.client.pages.update(
                 page_id=bet_id,
                 properties={"Resultado": {"select": {"name": new_status}}},
             )
-            logger.info(f"✅ Estado actualizado: {bet_id} -> {new_status}")
+            logger.info(f"Estado actualizado: {bet_id} -> {new_status}")
             return True
         except APIResponseError as e:
-            logger.error(f"❌ Error de API actualizando estado: {e.code} - {str(e)}")
+            logger.error(f"Error de API actualizando estado: {e.code} - {str(e)}")
             raise NotionRepositoryError(f"Error actualizando estado: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error inesperado actualizando estado: {e}", exc_info=True)
+            logger.error(f"Error inesperado actualizando estado: {e}", exc_info=True)
             raise NotionRepositoryError(f"Error actualizando estado: {str(e)}") from e
 
     async def _find_or_create_tipster(self, tipster_name: str) -> Optional[str]:
@@ -165,12 +165,12 @@ class NotionBetRepository:
             ID de la página del tipster o None si no se puede crear/encontrar
         """
         if not self.tipster_database_id:
-            logger.warning("⚠️ No hay tipster_database_id configurado, no se puede vincular tipster")
+            logger.warning("No hay tipster_database_id configurado, no se puede vincular tipster")
             return None
             
         try:
             # Buscar tipster existente por nombre
-            logger.debug(f"🔍 Buscando tipster: {tipster_name}")
+            logger.debug(f"Buscando tipster: {tipster_name}")
             response = self.client.databases.query(
                 database_id=self.tipster_database_id,
                 filter={
@@ -184,11 +184,11 @@ class NotionBetRepository:
             results = response.get("results", [])
             if results:
                 tipster_id = results[0]["id"]
-                logger.info(f"✅ Tipster encontrado: {tipster_name} ({tipster_id})")
+                logger.info(f"Tipster encontrado: {tipster_name} ({tipster_id})")
                 return tipster_id
             
             # Si no existe, crear nuevo tipster
-            logger.debug(f"📝 Creando nuevo tipster: {tipster_name}")
+            logger.debug(f"Creando nuevo tipster: {tipster_name}")
             new_tipster = self.client.pages.create(
                 parent={"database_id": self.tipster_database_id},
                 properties={
@@ -199,11 +199,11 @@ class NotionBetRepository:
             )
             
             tipster_id = new_tipster["id"]
-            logger.info(f"✅ Tipster creado: {tipster_name} ({tipster_id})")
+            logger.info(f"Tipster creado: {tipster_name} ({tipster_id})")
             return tipster_id
             
         except Exception as e:
-            logger.error(f"❌ Error buscando/creando tipster {tipster_name}: {e}")
+            logger.error(f"Error buscando/creando tipster {tipster_name}: {e}")
             return None
     
     def _find_or_create_tipster_sync(self, tipster_name: str) -> Optional[str]:
@@ -218,7 +218,7 @@ class NotionBetRepository:
             ID de la página del tipster o None si no se puede crear/encontrar
         """
         if not self.tipster_database_id:
-            logger.warning("⚠️ tipster_database_id no configurado")
+            logger.warning("tipster_database_id no configurado")
             return None
             
         try:
@@ -232,7 +232,7 @@ class NotionBetRepository:
                     break
             
             if not title_property_name:
-                logger.error("❌ No se encontró propiedad title en la base de Tipsters")
+                logger.error("No se encontró propiedad title en la base de Tipsters")
                 return None
             
             # Buscar tipster existente
@@ -250,7 +250,7 @@ class NotionBetRepository:
             
             if results:
                 tipster_id = results[0]["id"]
-                logger.info(f"✅ Tipster encontrado: '{tipster_name}'")
+                logger.info(f"Tipster encontrado: '{tipster_name}'")
                 return tipster_id
             
             # Si no existe, crear nuevo tipster
@@ -264,11 +264,11 @@ class NotionBetRepository:
             )
             
             tipster_id = new_tipster["id"]
-            logger.info(f"✅ Tipster creado: '{tipster_name}'")
+            logger.info(f"Tipster creado: '{tipster_name}'")
             return tipster_id
             
         except Exception as e:
-            logger.error(f"❌ Error en _find_or_create_tipster_sync: {e}")
+            logger.error(f"Error en _find_or_create_tipster_sync: {e}")
             return None
 
     async def find_all(
@@ -298,7 +298,7 @@ class NotionBetRepository:
             return results
 
         except Exception as e:
-            logger.error(f"❌ Error consultando apuestas: {e}")
+            logger.error(f"Error consultando apuestas: {e}")
             return []
 
     def _map_to_notion_properties(self, bet_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -315,8 +315,8 @@ class NotionBetRepository:
                 analyzed_data = {}
         
         # LOG CRÍTICO: Ver qué datos llegaron de OpenAI
-        logger.info(f"🔍 ANALYZED_DATA RECIBIDO: {json.dumps(analyzed_data, indent=2, ensure_ascii=False)}")
-        logger.info(f"🔍 BET_DATA KEYS: {list(bet_data.keys())}")
+        logger.info(f"ANALYZED_DATA RECIBIDO: {json.dumps(analyzed_data, indent=2, ensure_ascii=False)}")
+        logger.info(f"BET_DATA KEYS: {list(bet_data.keys())}")
 
         # Valores por defecto
         title = bet_data.get("event", bet_data.get("title", "Apuesta"))
@@ -334,8 +334,8 @@ class NotionBetRepository:
             or bet_data.get("selection", "No especificado")
         )
         
-        logger.info(f"📊 MARKET extraído: '{market}'")
-        logger.info(f"🎯 SELECTION extraída: '{selection}'")
+        logger.info(f"MARKET extraído: '{market}'")
+        logger.info(f"SELECTION extraída: '{selection}'")
 
         # Cuota
         try:
@@ -345,9 +345,9 @@ class NotionBetRepository:
                 or bet_data.get("odds", "0")
             )
             odds = float(str(cuota_value).replace(",", "."))
-            logger.info(f"💰 CUOTA extraída: {odds}")
+            logger.info(f"CUOTA extraída: {odds}")
         except (ValueError, TypeError) as e:
-            logger.warning(f"⚠️ Error parseando cuota: {e}")
+            logger.warning(f"Error parseando cuota: {e}")
             odds = 0.0
 
         # Monto (importe) - CORREGIDO: Usar analyzed_data correctamente
@@ -355,7 +355,7 @@ class NotionBetRepository:
             monto_value = analyzed_data.get("Monto_Apostado", "")
             
             if not monto_value or monto_value == "No especificado":
-                logger.warning("⚠️ No se encontró Monto_Apostado en analyzed_data")
+                logger.warning("No se encontró Monto_Apostado en analyzed_data")
                 amount = 0.0
             else:
                 # Convertir a string y limpiar
@@ -364,9 +364,9 @@ class NotionBetRepository:
                 amount_str_clean = amount_str.replace("€", "").replace("$", "").replace("USD", "").replace("EUR", "").replace(",", "").strip()
                 
                 amount = float(amount_str_clean)
-                logger.info(f"💵 MONTO extraído: {amount} (original: '{monto_value}')")
+                logger.info(f"MONTO extraído: {amount} (original: '{monto_value}')")
         except (ValueError, TypeError, AttributeError) as e:
-            logger.error(f"❌ Error parseando monto: {e}")
+            logger.error(f"Error parseando monto: {e}")
             amount = 0.0
 
         # TIPO DE APUESTA: Simple si 1 apuesta, Combinada si más de 1
@@ -462,11 +462,11 @@ class NotionBetRepository:
                     properties["Tipster"] = {
                         "relation": [{"id": tipster_id}]
                     }
-                    logger.info(f"✅ Tipster vinculado: {tipster}")
+                    logger.info(f"Tipster vinculado: {tipster}")
                 else:
                     info_adicional += f"\n👤 Tipster: {tipster}"
             except Exception as e:
-                logger.error(f"❌ Error al vincular tipster: {e}")
+                logger.error(f"Error al vincular tipster: {e}")
                 info_adicional += f"\n👤 Tipster: {tipster}"
         else:
             info_adicional += f"\n👤 Tipster: {tipster}"
@@ -489,12 +489,12 @@ class NotionBetRepository:
                     }
                 ]
             }
-            logger.debug(f"✅ Archivo adjunto con file_upload_id: {file_upload_id}")
+            logger.debug(f"Archivo adjunto con file_upload_id: {file_upload_id}")
         elif filename:
             # Si no hay file_upload_id, agregar referencia en el mercado
             market_with_file = f"{market}\n📎 Archivo: {filename}" if market else f"📎 Archivo: {filename}"
             properties["Mercado"] = {"rich_text": [{"text": {"content": market_with_file[:2000]}}]}
-            logger.debug(f"ℹ️ Archivo referenciado en Mercado: {filename}")
+            logger.debug(f"Archivo referenciado en Mercado: {filename}")
 
         return properties
 

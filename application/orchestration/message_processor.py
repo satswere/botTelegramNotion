@@ -126,7 +126,7 @@ class MessageProcessor:
                 notion_file_id=notion_file_id,
             )
 
-            logger.info(f"✅ Imagen procesada exitosamente - bet_id: {bet_dto.id}")
+            logger.info(f"Imagen procesada exitosamente - bet_id: {bet_dto.id}")
 
             return {
                 "success": True,
@@ -136,7 +136,7 @@ class MessageProcessor:
             }
 
         except Exception as e:
-            logger.error(f"❌ Error procesando mensaje con imagen: {e}", exc_info=True)
+            logger.error(f"Error procesando mensaje con imagen: {e}", exc_info=True)
             raise MessageProcessingError(f"Error en procesamiento: {str(e)}") from e
 
     def _extract_message_metadata(self, message: Message) -> Dict[str, Any]:
@@ -152,7 +152,7 @@ class MessageProcessor:
         try:
             return self._message_extractor.extract_metadata(message)
         except Exception as e:
-            logger.error(f"❌ Error extrayendo metadatos: {e}")
+            logger.error(f"Error extrayendo metadatos: {e}")
             # Retornar metadatos mínimos si falla
             return {
                 "message_id": message.message_id,
@@ -191,11 +191,11 @@ class MessageProcessor:
             # Descargar
             await file.download_to_drive(str(file_path))
 
-            logger.info(f"✅ Imagen descargada: {filename}")
+            logger.info(f"Imagen descargada: {filename}")
             return filename
 
         except Exception as e:
-            logger.error(f"❌ Error descargando imagen: {e}")
+            logger.error(f"Error descargando imagen: {e}")
             raise MessageProcessingError(f"Error descargando imagen: {str(e)}") from e
 
     async def _upload_image_to_notion(self, filename: str) -> Optional[str]:
@@ -217,18 +217,18 @@ class MessageProcessor:
             file_upload_id = await self._notion_file_uploader.upload_file(file_path)
             
             if file_upload_id:
-                logger.info(f"✅ Imagen subida a Notion: {file_upload_id}")
+                logger.info(f"Imagen subida a Notion: {file_upload_id}")
             else:
-                logger.warning(f"⚠️ No se obtuvo file_upload_id para {filename}")
+                logger.warning(f"No se obtuvo file_upload_id para {filename}")
             
             return file_upload_id
 
         except NotionFileUploaderError as e:
-            logger.error(f"❌ Error subiendo imagen a Notion: {e}")
+            logger.error(f"Error subiendo imagen a Notion: {e}")
             # No lanzar excepción, solo advertir y continuar sin archivo
             return None
         except Exception as e:
-            logger.error(f"❌ Error inesperado subiendo imagen: {e}")
+            logger.error(f"Error inesperado subiendo imagen: {e}")
             return None
 
     def _create_image_dto(self, message: Message, filename: str) -> ImageDTO:

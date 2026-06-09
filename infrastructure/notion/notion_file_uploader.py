@@ -65,7 +65,7 @@ class NotionFileUploader:
         filename = file_path.name
         file_size = file_path.stat().st_size
         
-        logger.info(f"🚀 Iniciando subida de archivo: {filename} ({file_size} bytes)")
+        logger.info(f"Iniciando subida de archivo: {filename} ({file_size} bytes)")
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -80,14 +80,14 @@ class NotionFileUploader:
                     session, upload_url, file_path, filename
                 )
                 
-                logger.info(f"✅ Archivo subido exitosamente: {filename}")
+                logger.info(f"Archivo subido exitosamente: {filename}")
                 return file_upload_id
                 
         except aiohttp.ClientError as e:
-            logger.error(f"❌ Error de red subiendo archivo: {e}")
+            logger.error(f"Error de red subiendo archivo: {e}")
             raise NotionFileUploaderError(f"Error de conexión: {str(e)}") from e
         except Exception as e:
-            logger.error(f"❌ Error inesperado subiendo archivo: {e}", exc_info=True)
+            logger.error(f"Error inesperado subiendo archivo: {e}", exc_info=True)
             raise NotionFileUploaderError(f"Error subiendo archivo: {str(e)}") from e
 
     async def _create_file_upload_object(self, session: aiohttp.ClientSession) -> str:
@@ -103,7 +103,7 @@ class NotionFileUploader:
         Raises:
             NotionFileUploaderError: Si falla la creación
         """
-        logger.debug("1️⃣ Creando File Upload Object...")
+        logger.debug("1⃣ Creando File Upload Object...")
         
         create_url = f"{self._api_base}/file_uploads"
         headers = {
@@ -124,7 +124,7 @@ class NotionFileUploader:
             if not file_upload_id:
                 raise NotionFileUploaderError("No se obtuvo file_upload_id")
             
-            logger.debug(f"✅ File Upload Object creado: {file_upload_id}")
+            logger.debug(f"File Upload Object creado: {file_upload_id}")
             return file_upload_id
 
     async def _get_upload_url(
@@ -143,7 +143,7 @@ class NotionFileUploader:
         Raises:
             NotionFileUploaderError: Si falla la obtención
         """
-        logger.debug("📡 Obteniendo URL de subida...")
+        logger.debug("Obteniendo URL de subida...")
         
         get_url = f"{self._api_base}/file_uploads/{file_upload_id}"
         
@@ -160,7 +160,7 @@ class NotionFileUploader:
             if not upload_url:
                 raise NotionFileUploaderError("No se obtuvo upload_url")
             
-            logger.debug(f"✅ URL de subida obtenida")
+            logger.debug(f"URL de subida obtenida")
             return upload_url
 
     async def _upload_file_content(
@@ -182,7 +182,7 @@ class NotionFileUploader:
         Raises:
             NotionFileUploaderError: Si falla la subida
         """
-        logger.debug("2️⃣ Subiendo contenido del archivo...")
+        logger.debug("2⃣ Subiendo contenido del archivo...")
         
         with open(file_path, 'rb') as f:
             form_data = aiohttp.FormData()
@@ -210,4 +210,4 @@ class NotionFileUploader:
                         f"Estado del archivo no es 'uploaded': {status}"
                     )
                 
-                logger.debug(f"✅ Contenido subido exitosamente")
+                logger.debug(f"Contenido subido exitosamente")

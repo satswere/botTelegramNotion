@@ -1,8 +1,9 @@
 """
 OpenAI Handler
 
-Cliente para la API de OpenAI Azure (GPT-4 Vision).
-Maneja comunicación con el servicio y procesamiento de imágenes.
+Cliente para la API de OpenAI/Azure AI Services.
+Detecta automáticamente el formato de API (Responses vs Chat Completions)
+basándose en la URL configurada.
 """
 
 import aiohttp
@@ -19,6 +20,8 @@ from tenacity import (
     before_sleep_log,
 )
 import logging
+
+from infrastructure.openai.api_strategy import detect_api_strategy, APIStrategy
 
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
@@ -41,6 +44,10 @@ class OpenAIHandler:
         if not self.api_version:
             raise ValueError("API_VERSION no está configurada en el archivo .env")
 
+        # Detectar estrategia de API automáticamente
+        self.strategy: APIStrategy = detect_api_strategy(self.base_url)
+        logger.info(f"OpenAI Handler inicializado - Modelo: {self.api_version}")
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -52,33 +59,34 @@ class OpenAIHandler:
         self, message: str, system_prompt: str = "Eres un asistente útil"
     ) -> str:
         """
-        Envía un mensaje al modelo GPT y obtiene una respuesta
+        Envía un mensaje al modelo GPT y obtiene una respuesta.
 
         Args:
-            message (str): El mensaje del usuario
-            system_prompt (str, optional): El prompt del sistema. Por defecto es "Eres un asistente útil"
+            message: El mensaje del usuario
+            system_prompt: El prompt del sistema
 
         Returns:
-            str: La respuesta del modelo
+            La respuesta del modelo
         """
         try:
-            url = f"{self.base_url}?api-version={self.api_version}"
+            url = self.strategy.build_url(self.base_url, self.api_version)
+            payload = self.strategy.build_text_payload(
+                self.api_version, message, system_prompt
+            )
+            headers = self.strategy.get_headers(self.api_key)
 
-            payload = {
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message},
-                ]
-            }
-
-            headers = {"api-key": self.api_key, "Content-Type": "application/json"}
-
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=60)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     response_data = await response.json()
-                    return response_data["choices"][0]["message"]["content"]
+
+                    if response.status != 200:
+                        error_msg = response_data.get("error", {}).get("message", str(response_data))
+                        raise RuntimeError(f"API error ({response.status}): {error_msg}")
+
+                    return self.strategy.extract_content(response_data)
         except Exception as e:
-            print(f"Error al enviar mensaje a OpenAI: {str(e)}")
+            logger.error(f"Error al enviar mensaje a OpenAI: {str(e)}")
             raise
 
     @retry(
@@ -95,15 +103,15 @@ class OpenAIHandler:
         system_prompt: str = "Eres un asistente útil para analizar imágenes",
     ) -> str:
         """
-        Analiza una imagen usando el modelo GPT-4 Vision
+        Analiza una imagen usando el modelo GPT-4 Vision.
 
         Args:
-            image_path (str): Ruta al archivo de imagen o URL
-            prompt (str, optional): Instrucciones específicas para analizar la imagen
-            system_prompt (str, optional): Mensaje del sistema para el asistente
+            image_path: Ruta al archivo de imagen o URL
+            prompt: Instrucciones específicas para analizar la imagen
+            system_prompt: Mensaje del sistema para el asistente
 
         Returns:
-            str: Descripción o análisis de la imagen
+            Descripción o análisis de la imagen
         """
         try:
             # Si es una ruta local, convertir a base64
@@ -115,28 +123,22 @@ class OpenAIHandler:
                 # Si es una URL, usarla directamente
                 image_url = image_path
 
-            url = f"{self.base_url}?api-version={self.api_version}"
+            url = self.strategy.build_url(self.base_url, self.api_version)
+            payload = self.strategy.build_image_payload(
+                self.api_version, image_url, prompt, system_prompt
+            )
+            headers = self.strategy.get_headers(self.api_key)
 
-            # Construir el payload según el formato requerido
-            payload = {
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": image_url}},
-                        ],
-                    },
-                ]
-            }
-
-            headers = {"api-key": self.api_key, "Content-Type": "application/json"}
-
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=120)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     response_data = await response.json()
-                    content = response_data["choices"][0]["message"]["content"]
+
+                    if response.status != 200:
+                        error_msg = response_data.get("error", {}).get("message", str(response_data))
+                        raise RuntimeError(f"API error ({response.status}): {error_msg}")
+
+                    content = self.strategy.extract_content(response_data)
 
                     # Limpiar marcadores de código JSON si están presentes
                     cleaned_content = (
@@ -151,5 +153,5 @@ class OpenAIHandler:
                         # Si no es JSON válido, devolver el contenido original
                         return content
         except Exception as e:
-            print(f"Error al analizar la imagen con OpenAI: {str(e)}")
+            logger.error(f"Error al analizar la imagen con OpenAI: {str(e)}")
             raise

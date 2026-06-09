@@ -86,7 +86,7 @@ class TelegramMessageExtractor:
             return message_data
 
         except AttributeError as e:
-            logger.error(f"❌ Atributo faltante en objeto Message de Telegram: {e}")
+            logger.error(f"Atributo faltante en objeto Message de Telegram: {e}")
             raise TelegramExtractorError(
                 f"Mensaje de Telegram con estructura inválida: {e}"
             ) from e
@@ -229,17 +229,17 @@ class TelegramMessageExtractor:
                 )
                 return file_info
 
-            logger.debug("ℹ️ No hay archivos adjuntos en el mensaje")
+            logger.debug("No hay archivos adjuntos en el mensaje")
             return None
 
         except AttributeError as e:
-            logger.error(f"❌ Atributo faltante en archivo de Telegram: {e}")
+            logger.error(f"Atributo faltante en archivo de Telegram: {e}")
             raise TelegramExtractorError(
                 f"Archivo de Telegram con estructura inválida: {e}"
             ) from e
 
         except Exception as e:
-            logger.error(f"❌ Error inesperado extrayendo archivo: {e}", exc_info=True)
+            logger.error(f"Error inesperado extrayendo archivo: {e}", exc_info=True)
             raise TelegramExtractorError(f"Error extrayendo archivo: {str(e)}") from e
 
     def is_valid_message(self, message: Message) -> bool:

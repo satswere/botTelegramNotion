@@ -105,15 +105,15 @@ class LocalFileStorage:
             with open(file_path, "wb") as f:
                 f.write(file_data)
 
-            logger.info(f"✅ Archivo guardado exitosamente: {filename} en {file_path}")
+            logger.info(f"Archivo guardado exitosamente: {filename} en {file_path}")
             return str(file_path)
 
         except PermissionError as e:
-            logger.error(f"❌ Permiso denegado guardando archivo {filename}: {e}")
+            logger.error(f"Permiso denegado guardando archivo {filename}: {e}")
             raise FileStorageError(f"Sin permisos para guardar {filename}") from e
 
         except OSError as e:
-            logger.error(f"❌ Error de IO guardando archivo {filename}: {e}")
+            logger.error(f"Error de IO guardando archivo {filename}: {e}")
             raise FileStorageError(
                 f"Error de disco guardando {filename}: {str(e)}"
             ) from e
@@ -154,15 +154,15 @@ class LocalFileStorage:
             return data
 
         except FileNotFoundError as e:
-            logger.error(f"❌ Archivo no encontrado: {filename}")
+            logger.error(f"Archivo no encontrado: {filename}")
             raise FileStorageError(f"Archivo no encontrado: {filename}") from e
 
         except PermissionError as e:
-            logger.error(f"❌ Permiso denegado cargando archivo {filename}: {e}")
+            logger.error(f"Permiso denegado cargando archivo {filename}: {e}")
             raise FileStorageError(f"Sin permisos para leer {filename}") from e
 
         except OSError as e:
-            logger.error(f"❌ Error de IO cargando archivo {filename}: {e}")
+            logger.error(f"Error de IO cargando archivo {filename}: {e}")
             raise FileStorageError(
                 f"Error de disco cargando {filename}: {str(e)}"
             ) from e
@@ -183,14 +183,14 @@ class LocalFileStorage:
 
             if file_path.exists():
                 file_path.unlink()
-                logger.info(f"🗑️ Archivo eliminado: {filename}")
+                logger.info(f"Archivo eliminado: {filename}")
                 return True
             else:
-                logger.warning(f"⚠️ Archivo no encontrado para eliminar: {filename}")
+                logger.warning(f"Archivo no encontrado para eliminar: {filename}")
                 return False
 
         except Exception as e:
-            logger.error(f"❌ Error eliminando archivo {filename}: {e}")
+            logger.error(f"Error eliminando archivo {filename}: {e}")
             return False
 
     async def exists(self, filename: str) -> bool:
@@ -217,7 +217,7 @@ class LocalFileStorage:
             return files[:limit]
 
         except Exception as e:
-            logger.error(f"❌ Error listando archivos: {e}")
+            logger.error(f"Error listando archivos: {e}")
             return []
 
     async def get_size(self, filename: str) -> int:
@@ -245,15 +245,15 @@ class LocalFileStorage:
                 raise FileNotFoundError(f"Archivo no encontrado: {filename}")
 
             size = file_path.stat().st_size
-            logger.info(f"✅ Tamaño obtenido: {filename} = {size} bytes")
+            logger.info(f"Tamaño obtenido: {filename} = {size} bytes")
             return size
 
         except FileNotFoundError as e:
-            logger.error(f"❌ Archivo no encontrado: {filename}")
+            logger.error(f"Archivo no encontrado: {filename}")
             raise FileStorageError(f"Archivo no encontrado: {filename}") from e
 
         except PermissionError as e:
-            logger.error(f"❌ Permiso denegado accediendo a {filename}: {e}")
+            logger.error(f"Permiso denegado accediendo a {filename}: {e}")
             raise FileStorageError(f"Sin permisos para acceder a {filename}") from e
 
         except Exception as e:
