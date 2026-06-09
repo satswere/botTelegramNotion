@@ -81,7 +81,7 @@ Gran refactorización del proyecto implementando arquitectura hexagonal (Ports &
 - Async/await en toda la aplicación
 
 #### Security
-- Validación de variables de entorno al inicio
+- Validación de variables de entorno al inicio 
 - Separación de secretos en .env
 - Type hints completos para seguridad de tipos
 

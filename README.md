@@ -1,102 +1,71 @@
-# Bot de Telegram con Integración a Notion
+# Bot Telegram → Notion | Arquitectura Hexagonal
 
-Bot de Telegram que recibe mensajes e imágenes y los sube automáticamente a una base de datos de Notion. Implementación con **Arquitectura Hexagonal** (Clean Architecture).
+Bot de Telegram que recibe imágenes de tickets de apuestas, las analiza con IA (OpenAI Vision) y las registra automáticamente en una base de datos Notion.
+
+![Python](https://img.shields.io/badge/Python-3.8+-blue)
+![Architecture](https://img.shields.io/badge/Architecture-Hexagonal-green)
+![Tests](https://img.shields.io/badge/Tests-121+-success)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+## ✨ Características
+
+### 🎯 Funcionalidades Principales
+
+- ✅ **Análisis Automático con IA**: OpenAI GPT-4 Vision extrae 12 campos de tickets de apuestas
+- ✅ **Integración Completa con Notion**: Creación de registros con archivos adjuntos reales
+- ✅ **Cola de Procesamiento**: Manejo eficiente de múltiples imágenes simultáneas
+- ✅ **Arquitectura Limpia**: Clean Architecture con separación clara de capas
+- ✅ **Alta Testabilidad**: 121+ tests con >85% de cobertura
+- ✅ **Logging Profesional**: Sistema de logs estructurado y detallado
+
+### 📊 Campos Extraídos Automáticamente
+
+1. **ID_Ticket** - Identificador del ticket
+2. **Deporte** - Deporte del evento (Fútbol, Baloncesto, etc.)
+3. **Evento** - Nombre del partido (ej: "Lakers vs Celtics")
+4. **Mercado** - Tipo de apuesta (Ganador, Over/Under, etc.)
+5. **Selección** - Opción apostada
+6. **Cuota** - Cuota decimal
+7. **Monto_Apostado** - Importe con símbolo de moneda
+8. **Ganancia_Potencial** - Ganancia esperada
+9. **Estado_Apuesta** - Pendiente/Ganada/Perdida
+10. **Numero_Apuestas** - Simple (1) o Combinada (2+)
+11. **Fecha_Evento** - Fecha del evento
+12. **Casa_Apuestas** - Nombre de la casa de apuestas
 
 ## 🏗️ Arquitectura
 
-El proyecto sigue los principios de **Hexagonal Architecture** (Ports & Adapters):
+### Clean Architecture (Hexagonal)
 
-- **Domain Layer**: Lógica de negocio pura (Bet, Money, BetStatus)
-- **Application Layer**: Casos de uso y orquestación
-- **Infrastructure Layer**: Adaptadores externos (Notion, Telegram, OpenAI, Storage)
-- **Presentation Layer**: Handlers de Telegram
-
-## 🚀 Funcionalidades Principales
-
-### 📸 Recepción y Análisis de Imágenes
-- **Recibe imágenes** desde Telegram automáticamente
-- **Análisis con IA** (OpenAI Vision) para extraer información de apuestas
-- **Subida REAL a Notion** usando el proceso oficial de 3 pasos
-- **Soporte múltiples formatos**: JPG, PNG, GIF, BMP, WebP, TIFF
-- **Cola de procesamiento** para manejo eficiente de múltiples imágenes
-
-### 📊 Integración Completa con Notion
-- **Creación de registros** en base de datos de Notion
-- **Subida de archivos** con URLs públicas
-- **Propiedades estructuradas**: evento, cuota, stake, estado, etc.
-- **Actualización de estado** de apuestas
-- **Consulta de estadísticas** y listado de apuestas
-
-### 🔧 Características Técnicas
-- **Arquitectura hexagonal** con separación clara de capas
-- **Dependency Injection** para máxima testabilidad
-- **Manejo de errores robusto** con logging detallado
-- **Configuración mediante variables de entorno**
-- **Tests unitarios y de integración** (121+ tests)
-- **Type hints** completos para mejor mantenibilidad
-
-## 📋 Requisitos
-
-- **Python 3.8+**
-- **python-telegram-bot** - Interfaz con API de Telegram
-- **notion-client** - Cliente oficial de Notion
-- **openai** - Cliente de OpenAI para análisis de imágenes
-- **python-dotenv** - Manejo de variables de entorno
-- **aiohttp** - Peticiones HTTP asíncronas
-- **Pillow** - Procesamiento de imágenes
-- **pytest** - Framework de testing
-
-## ⚙️ Configuración
-
-### 1. Instalación de Dependencias
-```bash
-pip install -r requirements.txt
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     PRESENTATION                             │
+│                   (Telegram Handlers)                        │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+┌───────────────────────┴─────────────────────────────────────┐
+│                     APPLICATION                              │
+│              (Use Cases & Orchestration)                     │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+┌───────────────────────┴─────────────────────────────────────┐
+│                       DOMAIN                                 │
+│               (Business Logic & Entities)                    │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+┌───────────────────────┴─────────────────────────────────────┐
+│                   INFRASTRUCTURE                             │
+│         (Notion, Telegram, OpenAI, Storage)                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Configuración de Variables de Entorno
-Copia el archivo `.env.example` a `.env` y configura tus tokens:
+**Beneficios**:
+- 🔒 Lógica de negocio independiente de frameworks
+- 🧪 Alta testabilidad con mocks
+- 🔄 Fácil intercambio de adaptadores (ej: cambiar de Notion a Airtable)
+- 📖 Código mantenible y legible
 
-```env
-# Tokens requeridos
-TELEGRAM_BOT_TOKEN=tu_telegram_bot_token_aqui
-NOTION_TOKEN=tu_notion_token_aqui
-OPENAI_API_KEY=tu_openai_api_key_aqui
-
-# ID de la base de datos de Notion
-NOTION_DATABASE_ID=tu_database_id_aqui
-
-# Configuración opcional
-ENVIRONMENT=development
-DEBUG=true
-LOG_LEVEL=INFO
-```
-
-### 3. Ejecución del Bot
-
-**Nuevo punto de entrada unificado:**
-```bash
-python main.py
-```
-
-⚠️ **Deprecated (se eliminará pronto):**
-- ~~`python bot_main.py`~~ (legacy)
-- ~~`python bot_main_v2.py`~~ (arquitectura v2)
-
-### 4. Tests
-
-```bash
-# Ejecutar todos los tests
-pytest tests/ -v
-
-# Ejecutar solo tests unitarios
-pytest tests/unit/ -v
-
-# Ejecutar con coverage
-pytest tests/ --cov=application --cov=domain --cov=infrastructure
-
-# Tests de integración (requieren credenciales configuradas)
-pytest tests/integration/ -v
-```
+## 🚀 Inicio Rápido
 
 ## 📁 Estructura del Proyecto
 
@@ -128,135 +97,180 @@ botTelegramNotion/
 │       ├── image_dto.py
 │       └── message_dto.py
 │
-├── infrastructure/                # 🔌 Capa de infraestructura
-│   ├── notion/                    # Adapter de Notion
-│   │   └── notion_repository.py
-│   ├── telegram/                  # Adapter de Telegram
-│   │   └── telegram_extractor.py
-│   ├── openai/                    # Adapter de OpenAI
-│   │   └── openai_analyzer.py
-│   └── storage/                   # Adapter de almacenamiento
-│       └── file_storage.py
+### 1. Instalación
+
+```bash
+# Clonar el repositorio
+git clone <url-del-repo>
+cd botTelegramNotion
+
+# Instalar dependencias
+pip install -r requirements.txt
+```
+
+### 2. Configuración
+
+Copia `.env.example` a `.env` y configura:
+
+```env
+# Tokens requeridos
+TELEGRAM_BOT_TOKEN=tu_telegram_bot_token_aqui
+NOTION_TOKEN=tu_notion_token_aqui
+OPENAI_API_KEY=tu_openai_api_key_aqui
+NOTION_DATABASE_ID=tu_database_id_aqui
+
+# Opcional
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+```
+
+### 3. Ejecutar el Bot
+
+```bash
+python main.py
+```
+
+### 4. Tests
+
+```bash
+# Todos los tests
+pytest tests/ -v
+
+# Con coverage
+pytest --cov=application --cov=domain --cov=infrastructure --cov-report=html
+
+# Tests de integración (requieren credenciales)
+pytest tests/integration/ -v
+```
+
+## 💬 Uso
+
+### Comandos Telegram
+
+- `/start` - Iniciar el bot
+- `/help` - Ver ayuda
+- `/status` - Ver estadísticas
+
+### Procesamiento de Apuestas
+
+1. Envía una **imagen** de tu ticket
+2. El bot **analiza** con IA (OpenAI GPT-4 Vision)
+3. **Extrae** todos los campos automáticamente
+4. **Crea registro** en Notion con imagen adjunta
+5. **Responde** con detalles completos
+
+**Ejemplo de respuesta:**
+
+```
+✅ Apuesta procesada exitosamente!
+
+⚽ Evento: Real Madrid vs Barcelona
+🎲 Tipo: Ganador Partido
+📊 Cuota: 2.50
+💰 Importe: $100.00
+💎 Ganancia potencial: $250.00
+🔄 Estado: Pendiente
+
+🔗 Ver en Notion
+```
+
+## 📁 Estructura del Proyecto
+
+```
+botTelegramNotion/
+├── main.py                        # 🚀 Punto de entrada principal
 │
-├── presentation/                  # 🎨 Capa de presentación
-│   └── handlers/                  # Handlers de Telegram
+├── domain/                        # 🎯 Lógica de negocio
+│   ├── entities/                  # Entidades (Bet)
+│   ├── value_objects/             # Value Objects (Money, BetStatus)
+│   ├── repositories/              # Interfaces de repositorios
+│   └── services/                  # Servicios de dominio
+│
+├── application/                   # 🔄 Casos de uso
+│   ├── use_cases/                 # Use cases
+│   │   ├── create_bet.py
+│   │   ├── process_bet_image.py
+│   │   └── update_bet_status.py
+│   ├── orchestration/             # Orquestación
+│   │   ├── message_processor.py
+│   │   └── command_orchestrator.py
+│   └── dtos/                      # Data Transfer Objects
+│
+├── infrastructure/                # 🔌 Adaptadores externos
+│   ├── notion/                    # Notion API
+│   ├── openai/                    # OpenAI Vision
+│   ├── telegram/                  # Telegram API
+│   └── storage/                   # File storage
+│
+├── presentation/                  # 🎨 Handlers de Telegram
+│   └── handlers/
 │       ├── start_handler.py
 │       ├── help_handler.py
 │       ├── status_handler.py
 │       └── image_handler.py
 │
-├── tests/                         # 🧪 Tests
-│   ├── unit/                      # Tests unitarios (121 tests)
-│   │   ├── domain/
-│   │   ├── application/
-│   │   └── infrastructure/
-│   └── integration/               # Tests de integración
+├── tests/                         # 🧪 Tests (121+)
+│   ├── unit/
+│   └── integration/
 │
-├── storage/                       # 📁 Almacenamiento temporal
-│   ├── images/                    # Imágenes descargadas
-│   └── logs/                      # Logs de la aplicación
+├── docs/                          # 📚 Documentación
+│   ├── LOGGING.md                 # Guía de logging
+│   ├── TIPSTER_RELATION_SETUP.md  # Configuración de Tipster
+│   └── RELEASE_NOTES_v2.0.0.md    # Notas de versión
 │
+├── scripts/                       # 🛠️ Scripts de desarrollo
+│   ├── debug_openai_response.py   # Debug de extracción OpenAI
+│   └── validate_extraction.py     # Validación de flujo completo
+│
+├── storage/                       # 📦 Archivos temporales
+│   └── images/                    # Imágenes temporales
+│
+├── CONTRIBUTING.md                # Guía de desarrollo
+├── CHANGELOG.md                   # Historial de cambios
 ├── requirements.txt               # Dependencias
-├── pytest.ini                     # Configuración de pytest
-├── .env.example                   # Ejemplo de configuración
-└── README.md                      # Esta documentación
+└── pytest.ini                     # Config de tests
 ```
 
-## 🚀 Uso
+## 🔧 Desarrollo
 
-### Comandos del Bot
+### Logs Profesionales
 
-Una vez iniciado el bot, puedes usar los siguientes comandos en Telegram:
+El proyecto usa un sistema de logging estructurado:
 
-- `/start` - Iniciar el bot y ver mensaje de bienvenida
-- `/help` - Mostrar ayuda y comandos disponibles
-- `/status` - Ver estadísticas de apuestas y estado del sistema
-
-### Envío de Apuestas
-
-1. **Envía una imagen** de tu apuesta al bot
-2. El bot **descarga y analiza** la imagen con IA
-3. **Extrae automáticamente**: evento, cuota, stake, etc.
-4. **Crea un registro** en Notion con toda la información
-5. **Responde con confirmación** y detalles de la apuesta
-
-### Ejemplo de Flujo
-
-```
-Usuario → [Envía imagen de apuesta]
-Bot     → ⏳ Procesando imagen...
-Bot     → ✅ Apuesta procesada exitosamente!
-          📊 Evento: Lakers vs Warriors
-          💰 Stake: $100.00
-          📈 Cuota: 2.50
-          🔗 Ver en Notion
-```
-
-## 🧪 Testing
-
-El proyecto cuenta con **121+ tests** organizados en:
-
-### Tests Unitarios
 ```bash
-# Domain layer tests
-pytest tests/unit/domain/ -v
+# Ver logs en tiempo real
+tail -f storage/logs/bot.log
 
-# Application layer tests  
-pytest tests/unit/application/ -v
-
-# Infrastructure layer tests
-pytest tests/unit/infrastructure/ -v
+# Filtrar por nivel
+grep "ERROR" storage/logs/bot.log
+grep "🚨" storage/logs/bot.log  # CRITICAL
 ```
 
-### Tests de Integración
-```bash
-# Requieren credenciales configuradas
-pytest tests/integration/ -v
-```
+Ver [docs/LOGGING.md](docs/LOGGING.md) para guía completa.
 
-### Coverage
-```bash
-# Generar reporte de cobertura
-pytest tests/ --cov=application --cov=domain --cov=infrastructure --cov-report=html
+### Convenciones de Código
 
-# Ver reporte en navegador
-open htmlcov/index.html  # Linux/Mac
-start htmlcov/index.html # Windows
-```
+- **Clean Architecture**: Separación estricta de capas
+- **Type Hints**: En todas las funciones
+- **Docstrings**: Formato Google style
+- **Tests**: Coverage mínimo 85%
+- **Commits**: Conventional Commits
 
-## 🔧 Desarrollo y Debugging
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para guía completa de desarrollo.
 
-### Logs
-- Los logs se guardan en `bot.log`
-- También se muestran en consola con colores
-- Usa `LOG_LEVEL=DEBUG` en `.env` para más detalle
+## 📚 Documentación
 
-### Estructura de Logs
-```
-2024-01-01 10:00:00 - INFO - 🚀 Starting bot...
-2024-01-01 10:00:01 - INFO - ✅ Infrastructure layer ready
-2024-01-01 10:00:02 - INFO - ✅ Application layer ready
-2024-01-01 10:00:03 - INFO - 🤖 Bot is running
-```
-
-## 📚 Documentación Adicional
-
-- **ARCHITECTURE_ANALYSIS.md**: Análisis detallado de la arquitectura
-- **FOLDER_STRUCTURE.md**: Estructura completa del proyecto
-- **REFACTOR_COMPLETE.md**: Resumen de refactorizaciones
-- **INFRASTRUCTURE_IMPROVEMENTS.md**: Mejoras de infraestructura
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Guía de desarrollo
+- [docs/LOGGING.md](docs/LOGGING.md) - Sistema de logging
+- [CHANGELOG.md](CHANGELOG.md) - Historial de cambios
 
 ## 🤝 Contribuir
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para instrucciones detalladas.
 
-## 📝 Licencia
+## 📄 Licencia
 
-Este proyecto es de código abierto y está disponible bajo la licencia MIT.
+MIT License - Proyecto de código abierto
 
 ## 👤 Autor
 
@@ -264,19 +278,4 @@ Este proyecto es de código abierto y está disponible bajo la licencia MIT.
 
 ---
 
-⭐ Si este proyecto te fue útil, considera darle una estrella en GitHub!
-
-## 📋 Campos de la Base de Datos de Notion
-
-El bot crea registros con los siguientes campos:
-
-- **Nombre**: Texto con el nombre del archivo
-- **Fecha**: Fecha de creación del registro
-- **Archivo**: Archivo subido (imagen)
-- **Usuario**: Información del usuario de Telegram
-- **Chat ID**: ID del chat de Telegram
-- **Message ID**: ID del mensaje
-
-## 📄 Licencia
-
-Proyecto de uso personal/educativo.
+⭐ **Si este proyecto te ayudó, dale una estrella en GitHub!**
