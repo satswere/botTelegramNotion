@@ -43,4 +43,4 @@ class StartHandler:
         user_name = "Usuario"
         if update.effective_user and update.effective_user.first_name:
             user_name = update.effective_user.first_name
-        logger.info(f"👋 Usuario {user_name} inició el bot")
+        logger.info(f"Usuario {user_name} inició el bot")

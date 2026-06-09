@@ -95,10 +95,10 @@ class StatusHandler:
                 )
 
             await update.message.reply_text(full_response, parse_mode="Markdown")
-            logger.info("✅ Comando /status completado")
+            logger.info("Comando /status completado")
 
         except Exception as e:
-            logger.error(f"❌ Error en comando /status: {e}", exc_info=True)
+            logger.error(f"Error en comando /status: {e}", exc_info=True)
             await update.message.reply_text(
                 f"❌ Error obteniendo estado: {str(e)[:100]}", parse_mode="Markdown"
             )

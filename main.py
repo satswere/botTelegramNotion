@@ -27,6 +27,8 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
+import aiohttp
+from telegram import Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from notion_client import Client
 from dotenv import load_dotenv
@@ -86,7 +88,7 @@ class BotApplication:
     def __init__(self):
         """Initialize application with all dependencies."""
         self.logger = logging.getLogger(__name__)
-        self.logger.info("🚀 Starting bot...")
+        self.logger.info("Starting bot...")
 
         # Configuration
         self.config = self._load_configuration()
@@ -104,7 +106,10 @@ class BotApplication:
         # Presentation Layer
         self.handlers = self._setup_handlers()
 
-        self.logger.info("✅ Bot initialized")
+        # Validate external connections
+        self._validate_connections()
+
+        self.logger.info("Bot initialized")
 
     def _load_configuration(self) -> dict:
         """
@@ -143,6 +148,85 @@ class BotApplication:
             "tipster_database_id": os.getenv("TIPSTER_DATABASE_ID"),  # Opcional
             "images_path": Path("storage/images"),
         }
+
+    def _validate_connections(self) -> None:
+        """
+        Validate connections to external services at startup.
+
+        Checks:
+            - Telegram Bot token validity
+            - Notion API connection and database access
+            - OpenAI API reachability
+
+        Raises:
+            ConnectionError: If any critical service is unreachable
+        """
+        errors = []
+
+        # 1. Validate Telegram
+        try:
+            bot = Bot(token=self.config["telegram_token"])
+            loop = asyncio.new_event_loop()
+            bot_info = loop.run_until_complete(bot.get_me())
+            loop.close()
+            self.logger.info(f"Telegram: conectado como @{bot_info.username}")
+        except Exception as e:
+            errors.append(f"Telegram: {e}")
+            self.logger.error(f"Telegram: {e}")
+
+        # 2. Validate Notion
+        try:
+            notion_client = self.infrastructure["notion_client"]
+            notion_client.databases.retrieve(self.config["database_id"])
+            self.logger.info("Notion: conexión verificada")
+        except Exception as e:
+            errors.append(f"Notion: {e}")
+            self.logger.error(f"Notion: {e}")
+
+        # 3. Validate OpenAI
+        try:
+            api_url = os.getenv("OPENAI_API_URL")
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_url or not api_key:
+                raise ValueError("OPENAI_API_URL o OPENAI_API_KEY no configuradas")
+
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(self._check_openai(api_url, api_key))
+            loop.close()
+            self.logger.info("OpenAI: conexión verificada")
+        except Exception as e:
+            errors.append(f"OpenAI: {e}")
+            self.logger.error(f"OpenAI: {e}")
+
+        if errors:
+            error_msg = "\n".join(f"  - {err}" for err in errors)
+            raise ConnectionError(
+                f"❌ Falló la validación de conexiones:\n{error_msg}"
+            )
+
+    @staticmethod
+    async def _check_openai(api_url: str, api_key: str) -> None:
+        """Send a minimal request to verify OpenAI API connectivity."""
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "gpt-4.1",
+            "input": "ping",
+            "max_output_tokens": 1,
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 401:
+                    raise ConnectionError("API key inválida (401 Unauthorized)")
+                if resp.status == 404:
+                    raise ConnectionError("URL de API no encontrada (404)")
+                # 200 o 400 (bad request por payload mínimo) indica conectividad OK
+                if resp.status >= 500:
+                    raise ConnectionError(f"Servidor no disponible (HTTP {resp.status})")
 
     def _setup_infrastructure(self) -> dict:
         """
@@ -270,7 +354,7 @@ class BotApplication:
         - Maintain order of processing
         - Control resource usage
         """
-        self.logger.info("🔄 Queue processor started")
+        self.logger.info("Queue processor started")
 
         while True:
             try:
@@ -297,10 +381,10 @@ class BotApplication:
                     await asyncio.sleep(1.0)
 
             except Exception as e:
-                self.logger.error(f"❌ Error in queue processor: {e}", exc_info=True)
+                self.logger.error(f"Error in queue processor: {e}", exc_info=True)
                 self.processing_queue.task_done()
 
-        self.logger.info("✅ Queue processor stopped")
+        self.logger.info("Queue processor stopped")
 
     async def _on_startup(self, application: Application) -> None:
         """Callback executed when bot starts."""
@@ -348,7 +432,7 @@ class BotApplication:
         )
 
         # Start bot
-        self.logger.info("🚀 Bot is running. Press Ctrl+C to stop.")
+        self.logger.info("Bot is running. Press Ctrl+C to stop.")
 
         application.run_polling(allowed_updates=["message"])
 
@@ -378,11 +462,11 @@ def main() -> int:
         return 0
 
     except KeyboardInterrupt:
-        logger.info("👋 Bot stopped by user")
+        logger.info("Bot stopped by user")
         return 0
 
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}", exc_info=True)
+        logger.error(f"Fatal error: {e}", exc_info=True)
         return 1
 
 

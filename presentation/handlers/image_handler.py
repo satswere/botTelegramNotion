@@ -80,7 +80,7 @@ class ImageHandler:
             except Exception as e:
                 logger.warning(f"No se pudo enviar mensaje de cola: {e}")
 
-        logger.info(f"📥 Imagen agregada a la cola (total en cola: {queue_size + 1})")
+        logger.info(f"Imagen agregada a la cola (total en cola: {queue_size + 1})")
 
     async def process_from_queue(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -107,7 +107,7 @@ class ImageHandler:
 
         try:
             # Delegar procesamiento al MessageProcessor
-            logger.info(f"📨 Delegando procesamiento al MessageProcessor...")
+            logger.info(f"Delegando procesamiento al MessageProcessor...")
 
             result = await self._message_processor.process_image_message(
                 update, context
@@ -127,7 +127,7 @@ class ImageHandler:
                 else:
                     await message.reply_text(response, parse_mode="Markdown")
 
-                logger.info(f"✅ Imagen procesada exitosamente")
+                logger.info(f"Imagen procesada exitosamente")
             else:
                 error_msg = f"❌ Error procesando imagen"
                 if status:
@@ -136,7 +136,7 @@ class ImageHandler:
                     await message.reply_text(error_msg)
 
         except MessageProcessingError as e:
-            logger.error(f"❌ Error en procesamiento: {e}")
+            logger.error(f"Error en procesamiento: {e}")
             error_msg = f"❌ Error procesando imagen: {str(e)[:100]}"
             if status:
                 await status.edit_text(error_msg)
@@ -144,7 +144,7 @@ class ImageHandler:
                 await message.reply_text(error_msg)
 
         except Exception as e:
-            logger.error(f"❌ Error inesperado: {e}", exc_info=True)
+            logger.error(f"Error inesperado: {e}", exc_info=True)
             error_msg = f"❌ Error inesperado procesando imagen"
             if status:
                 await status.edit_text(error_msg)
